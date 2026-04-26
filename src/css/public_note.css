@@ -333,7 +333,7 @@ table th {
 }
 
 /* Copy button for code blocks */
-.public-note .content pre .code-block-copy-btn,
+.public-note .content .code-block-copy-btn,
 .code-block-copy-btn {
     position: absolute;
     top: 8px;
@@ -353,20 +353,37 @@ table th {
     z-index: 10;
 }
 
-.public-note .content pre .code-block-copy-btn:hover,
+.public-note .content .code-block-copy-btn {
+    background: transparent;
+    border: none;
+    color: #8a8f98;
+}
+
+.public-note .content .code-block-copy-btn:hover,
 .code-block-copy-btn:hover {
     background-color: #fff;
     color: #333;
 }
 
-.public-note .content pre .code-block-copy-btn.copied,
+.public-note .content .code-block-copy-btn:hover {
+    background: transparent;
+    border: none;
+}
+
+.public-note .content .code-block-copy-btn.copied,
 .code-block-copy-btn.copied {
     background-color: #4caf50;
     color: white;
     border-color: #4caf50;
 }
 
-.public-note .content pre .code-block-copy-btn svg,
+.public-note .content .code-block-copy-btn.copied {
+    background: transparent;
+    border: none;
+    color: #28a745;
+}
+
+.public-note .content .code-block-copy-btn svg,
 .code-block-copy-btn svg {
     width: 16px;
     height: 16px;
