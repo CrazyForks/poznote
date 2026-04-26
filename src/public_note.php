@@ -505,6 +505,10 @@ if (($note['type'] ?? 'note') === 'tasklist') {
     $content = resolveTasklistStoredContent($content, $note['entry'] ?? '');
 }
 
+// Public pages do not need the editor-only iframe workaround for audio embeds.
+// Convert saved audio iframes to native audio tags so shared links can stream them.
+$content = replacePublicAudioEmbedIframes($content);
+
 $contentForAttachmentDetection = $content;
 
 // ============================================================================

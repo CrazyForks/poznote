@@ -2,6 +2,11 @@
   "app": {
     "name": "Poznote"
   },
+  "markdown_syntax": {
+    "menu_item": "Sintaxis Markdown",
+    "page_title": "Sintaxis Markdown",
+    "heading": "Sintaxis Markdown compatible con Poznote"
+  },
   "common": {
     "notes": "Notas",
     "back_to_home": "Ir al panel",

@@ -2,6 +2,11 @@
   "app": {
     "name": "Poznote"
   },
+  "markdown_syntax": {
+    "menu_item": "Markdown syntax",
+    "page_title": "Markdown syntax",
+    "heading": "Markdown syntax supported by Poznote"
+  },
   "common": {
     "ok": "OK",
     "cancel": "Cancel",

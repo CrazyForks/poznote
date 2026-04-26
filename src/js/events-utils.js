@@ -68,6 +68,11 @@ function convertNoteAudioToIframes() {
     try {
         var audios = document.querySelectorAll('.noteentry audio');
         audios.forEach(function (audio) {
+            var editableRoot = audio.closest('[contenteditable="true"]');
+            if (!editableRoot || !editableRoot.closest('.noteentry')) {
+                return;
+            }
+
             // Skip if already converted
             if (audio.hasAttribute('data-converted-to-iframe')) {
                 return;

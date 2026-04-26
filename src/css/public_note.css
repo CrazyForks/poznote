@@ -104,7 +104,26 @@ body.public-note-page {
     margin: 10px 0;
 }
 
-.public-note audio,
+.public-note audio {
+    max-width: 280px;
+    width: 100%;
+    height: 54px;
+    display: block;
+    overflow: hidden;
+    margin: 8px 0;
+    padding: 0;
+    border: 1px solid #d0d7de;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: #ffffff;
+}
+
+.public-note audio::-webkit-media-controls-enclosure,
+.public-note audio::-webkit-media-controls-panel {
+    border-radius: inherit;
+    background: #ffffff;
+}
+
 .public-note .note-audio-embed {
     max-width: 280px;
     display: block;
@@ -265,21 +284,29 @@ table th {
 .public-note .content code {
     background-color: transparent;
     padding: 2px 6px;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: "Segoe UI Mono", "SF Mono", Monaco, Menlo, Consolas, "Ubuntu Mono", "Liberation Mono", "Courier New", monospace !important;
     font-size: 0.9em;
     color: #333;
     border-radius: 3px;
 }
 
 .public-note .content pre {
-    background-color: transparent !important;
-    padding: 12px;
+    font-family: "Segoe UI Mono", "SF Mono", Monaco, Menlo, Consolas, "Ubuntu Mono", "Liberation Mono", "Courier New", monospace !important;
+    background: #F8FAFC !important;
+    padding: 30px !important;
+    padding-bottom: 20px !important;
     border-radius: 4px;
     overflow-x: auto;
-    margin: 0.5em 0;
+    margin: 0.75em 0;
     position: relative;
-    border: 1px solid #e0e0e0;
-    white-space: pre;
+    border: 1px solid #e9ecef;
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    font-size: var(--code-block-font-size, 15px) !important;
+    color: #333;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* Extra padding for code blocks with language badge */
@@ -289,12 +316,14 @@ table th {
 
 .public-note .content pre code {
     background-color: transparent !important;
-    padding: 0;
+    padding: 0 !important;
     color: inherit;
-    border-radius: 0;
-    border: none;
+    border-radius: 0 !important;
+    border: none !important;
     display: block;
     line-height: 1.4;
+    white-space: inherit !important;
+    font-size: inherit !important;
 }
 
 /* Remove Highlight.js background in public notes */
@@ -563,11 +592,14 @@ table th {
     align-items: center;
     margin-left: 0.45em;
     vertical-align: middle;
+    color: inherit;
+    text-decoration: none;
 }
 
 .public-note .content .heading-anchor svg {
     width: 0.4em;
     height: 0.4em;
+    fill: currentColor;
 }
 
 /* Paragraphs */
@@ -717,6 +749,39 @@ html[data-theme='dark'] .theme-toggle-btn:hover {
     border-color: #666;
 }
 
+html[data-theme='dark'] .public-note audio {
+    background: #5f6368;
+    border-color: #4b5563;
+}
+
+html[data-theme='dark'] .public-note audio::-webkit-media-controls-enclosure,
+html[data-theme='dark'] .public-note audio::-webkit-media-controls-panel {
+    background: #5f6368;
+}
+
+html[data-theme='dark'] .public-note .content pre {
+    background-color: #262424 !important;
+    border-color: var(--dm-border) !important;
+    color: var(--dm-text-muted) !important;
+}
+
+html[data-theme='dark'] .public-note .content code:not([class*="hljs"]):not([class*="language-"]) {
+    background-color: var(--dm-surface);
+    color: var(--dm-text);
+    border-color: var(--dm-border);
+}
+
+html[data-theme='dark'] .public-note .content pre code:not([class*="hljs"]):not([class*="language-"]) {
+    background-color: transparent !important;
+    color: var(--dm-text-muted) !important;
+    border-color: transparent !important;
+}
+
+html[data-theme='dark'] .public-note .content pre code[class*="language-"],
+html[data-theme='dark'] .public-note .content code[class*="language-"] {
+    color: var(--dm-text-muted) !important;
+}
+
 html[data-theme='dark'] .public-note-attachments {
     border-bottom-color: #404040;
 }
@@ -821,4 +886,8 @@ html[data-theme='dark'] .public-note .content table th {
 html[data-theme='dark'] .public-note .content table td {
     background: #252526 !important;
     color: #e0e0e0 !important;
+}
+
+html[data-theme='dark'] .public-note .content .heading-anchor {
+    color: #e5e7eb;
 }

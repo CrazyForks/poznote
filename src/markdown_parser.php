@@ -17,7 +17,7 @@ function sanitizeAttributes($attrs, $allowedAttrs, $booleanAttrs = []) {
     $safeAttrs = [];
     
     // Extract and sanitize individual attributes
-    preg_match_all('/(\w+)\s*=\s*["\']([^"\']*)["\']/', $attrs, $attrMatches, PREG_SET_ORDER);
+    preg_match_all('/([\w-]+)\s*=\s*["\']([^"\']*)["\']/', $attrs, $attrMatches, PREG_SET_ORDER);
     foreach ($attrMatches as $attr) {
         $attrName = strtolower($attr[1]);
         $attrValue = $attr[2];
@@ -44,6 +44,11 @@ function sanitizeAttributes($attrs, $allowedAttrs, $booleanAttrs = []) {
  * @param string $text Markdown content
  * @return string HTML content
  */
+function markdownUsesPlainCodeBlockLanguage($language) {
+    $normalizedLanguage = is_string($language) ? strtolower(trim($language)) : '';
+    return $normalizedLanguage === 'normal' || $normalizedLanguage === 'code';
+}
+
 function parseMarkdown($text) {
     if (!$text) return '';
     
@@ -62,7 +67,14 @@ function parseMarkdown($text) {
         } else {
             // Escape HTML in code blocks so it displays as text
             $escapedCode = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
-            $protectedCodeBlocks[$codeBlockIndex] = '<pre><code>' . $escapedCode . '</code></pre>';
+            if (markdownUsesPlainCodeBlockLanguage($lang)) {
+                $protectedCodeBlocks[$codeBlockIndex] = '<pre data-language="CODE"><code data-language="CODE">' . $escapedCode . '</code></pre>';
+            } elseif ($lang !== '') {
+                $escapedLang = htmlspecialchars($lang, ENT_QUOTES, 'UTF-8');
+                $protectedCodeBlocks[$codeBlockIndex] = '<pre data-language="' . $escapedLang . '"><code class="language-' . $escapedLang . '">' . $escapedCode . '</code></pre>';
+            } else {
+                $protectedCodeBlocks[$codeBlockIndex] = '<pre><code>' . $escapedCode . '</code></pre>';
+            }
         }
         $codeBlockIndex++;
         return "\n" . $placeholder . "\n";
@@ -165,11 +177,9 @@ function parseMarkdown($text) {
         return $placeholder;
     }, $text);
 
-    // Protect iframe tags (for YouTube, Vimeo, and other embeds)
-    // Only allow iframes from trusted sources for security
-    $text = preg_replace_callback('/<iframe\s+([^>]+)>\s*<\/iframe>/is', function($matches) use (&$protectedElements, &$protectedIndex) {
-        $attrs = $matches[1];
-        
+    $protectIframeTag = function($attrs, $original) use (&$protectedElements, &$protectedIndex) {
+        $attrs = html_entity_decode($attrs, ENT_QUOTES, 'UTF-8');
+
         // Extract src attribute to validate the source
         if (preg_match('/src\s*=\s*["\']([^"\']+)["\']/i', $attrs, $srcMatch)) {
             $src = $srcMatch[1];
@@ -179,9 +189,10 @@ function parseMarkdown($text) {
             $allowedDomains = ALLOWED_IFRAME_DOMAINS;
             
             // Check if the src matches any allowed domain (properly validate hostname)
-            $isAllowed = false;
+            // or Poznote's local iframe audio player.
+            $isAllowed = preg_match('#^(?:/|\./|\.\./)?audio_player\.php(?:\?|$)#i', $src) === 1;
             $parsedUrl = parse_url($src);
-            if (isset($parsedUrl['host'])) {
+            if (!$isAllowed && isset($parsedUrl['host'])) {
                 $host = strtolower($parsedUrl['host']);
                 foreach ($allowedDomains as $domain) {
                     $domain = strtolower($domain);
@@ -199,13 +210,13 @@ function parseMarkdown($text) {
                 $safeAttrs = [];
                 
                 // Extract and sanitize individual attributes
-                preg_match_all('/(\w+)\s*=\s*["\']([^"\']*)["\']/', $attrs, $attrMatches, PREG_SET_ORDER);
+                preg_match_all('/([\w-]+)\s*=\s*["\']([^"\']*)["\']/', $attrs, $attrMatches, PREG_SET_ORDER);
                 foreach ($attrMatches as $attr) {
                     $attrName = strtolower($attr[1]);
                     $attrValue = $attr[2];
                     
                     // Only allow safe attributes
-                    if (in_array($attrName, ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen', 'title', 'loading', 'referrerpolicy', 'sandbox', 'style', 'class'])) {
+                    if (in_array($attrName, ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen', 'title', 'loading', 'referrerpolicy', 'sandbox', 'style', 'class', 'scrolling', 'contenteditable', 'data-is-audio', 'data-audio-src', 'data-converted-from-audio'])) {
                         $safeAttrs[] = $attrName . '="' . htmlspecialchars($attrValue, ENT_QUOTES, 'UTF-8') . '"';
                     }
                 }
@@ -221,9 +232,20 @@ function parseMarkdown($text) {
                 return $placeholder;
             }
         }
-        
+
         // If not allowed, return the original (will be escaped)
-        return $matches[0];
+        return $original;
+    };
+
+    // Protect iframe tags (YouTube, Bilibili, and Poznote audio player embeds).
+    $text = preg_replace_callback('/<iframe\s+([^>]+)>\s*<\/iframe>/is', function($matches) use ($protectIframeTag) {
+        return $protectIframeTag($matches[1], $matches[0]);
+    }, $text);
+
+    // Some saved/draft Markdown content can contain escaped media HTML.
+    // Decode only validated iframe tags; everything else remains escaped below.
+    $text = preg_replace_callback('/&lt;iframe\s+([\s\S]*?)&gt;\s*&lt;\/iframe&gt;/i', function($matches) use ($protectIframeTag) {
+        return $protectIframeTag($matches[1], $matches[0]);
     }, $text);
 
     // Protect video tags (for MP4 embeds and other video formats)

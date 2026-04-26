@@ -27,6 +27,12 @@ body.dark-mode .markdown-preview h6 {
     color: var(--dm-text);
 }
 
+/* Heading anchor links */
+html[data-theme='dark'] .heading-anchor,
+body.dark-mode .heading-anchor {
+    color: var(--dm-text) !important;
+}
+
 html[data-theme='dark'] .markdown-preview h1,
 html[data-theme='dark'] .markdown-preview h2,
 body.dark-mode .markdown-preview h1,
