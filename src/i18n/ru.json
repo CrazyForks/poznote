@@ -2,6 +2,11 @@
   "app": {
     "name": "Poznote"
   },
+  "markdown_syntax": {
+    "menu_item": "Синтаксис Markdown",
+    "page_title": "Синтаксис Markdown",
+    "heading": "Синтаксис Markdown, поддерживаемый Poznote"
+  },
   "common": {
     "ok": "OK",
     "cancel": "Отмена",

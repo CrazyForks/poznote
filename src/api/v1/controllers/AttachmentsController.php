@@ -241,103 +241,7 @@ class AttachmentsController {
             exit('Note ID and Attachment ID are required');
         }
         
-        // Check if note is publicly shared by querying master.db shared_links table
-        $isPubliclyShared = false;
-        $noteOwnerId = null;
-        
-        try {
-            require_once __DIR__ . '/../../../users/db_master.php';
-            $masterCon = getMasterConnection();
-            $stmt = $masterCon->prepare('SELECT user_id FROM shared_links WHERE target_type = ? AND target_id = ? LIMIT 1');
-            $stmt->execute(['note', $noteId]);
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($result) {
-                $isPubliclyShared = true;
-                $noteOwnerId = (int)$result['user_id'];
-                
-                // Load the correct user database if not already loaded
-                if (!isset($_SESSION['user_id']) || $_SESSION['user_id'] != $noteOwnerId) {
-                    require_once __DIR__ . '/../../../users/UserDataManager.php';
-                    $userDataManager = new UserDataManager($noteOwnerId);
-                    $dbPath = $userDataManager->getUserDatabasePath();
-                    
-                    // Reconnect to the correct database
-                    $this->con = new PDO('sqlite:' . $dbPath);
-                    $this->con->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-                    $this->con->exec('PRAGMA busy_timeout = 5000');
-                    $this->con->exec('PRAGMA foreign_keys = ON');
-                    
-                    // Update attachments directory for this user
-                    $this->attachmentsDir = $userDataManager->getUserAttachmentsPath();
-                }
-            }
-            
-            // If not individually shared, check if note belongs to a shared folder
-            if (!$isPubliclyShared) {
-                $folderToken = $_GET['folder_token'] ?? '';
-                if (!empty($folderToken)) {
-                    $stmt = $masterCon->prepare('SELECT user_id, target_id FROM shared_links WHERE token = ? AND target_type = ? LIMIT 1');
-                    $stmt->execute([$folderToken, 'folder']);
-                    $folderResult = $stmt->fetch(PDO::FETCH_ASSOC);
-                    
-                    if ($folderResult) {
-                        $folderOwnerId = (int)$folderResult['user_id'];
-                        $sharedFolderId = (int)$folderResult['target_id'];
-                        
-                        require_once __DIR__ . '/../../../users/UserDataManager.php';
-                        $userDataManager = new UserDataManager($folderOwnerId);
-                        $dbPath = $userDataManager->getUserDatabasePath();
-                        
-                        $userCon = new PDO('sqlite:' . $dbPath);
-                        $userCon->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-                        $userCon->exec('PRAGMA busy_timeout = 5000');
-                        
-                        // Get the note's folder_id
-                        $stmt = $userCon->prepare('SELECT folder_id FROM entries WHERE id = ? AND trash = 0');
-                        $stmt->execute([$noteId]);
-                        $noteRow = $stmt->fetch(PDO::FETCH_ASSOC);
-                        
-                        if ($noteRow) {
-                            $noteFolderId = (int)$noteRow['folder_id'];
-                            $belongsToSharedFolder = ($noteFolderId === $sharedFolderId);
-                            
-                            // Walk up the folder hierarchy to check ancestors
-                            if (!$belongsToSharedFolder) {
-                                $currentFolderId = $noteFolderId;
-                                $visited = [];
-                                while ($currentFolderId && !isset($visited[$currentFolderId])) {
-                                    $visited[$currentFolderId] = true;
-                                    $stmt = $userCon->prepare('SELECT parent_id FROM folders WHERE id = ?');
-                                    $stmt->execute([$currentFolderId]);
-                                    $folderRow = $stmt->fetch(PDO::FETCH_ASSOC);
-                                    if (!$folderRow || $folderRow['parent_id'] === null) {
-                                        break;
-                                    }
-                                    $parentId = (int)$folderRow['parent_id'];
-                                    if ($parentId === $sharedFolderId) {
-                                        $belongsToSharedFolder = true;
-                                        break;
-                                    }
-                                    $currentFolderId = $parentId;
-                                }
-                            }
-                            
-                            if ($belongsToSharedFolder) {
-                                $isPubliclyShared = true;
-                                $noteOwnerId = $folderOwnerId;
-                                
-                                $this->con = $userCon;
-                                $this->attachmentsDir = $userDataManager->getUserAttachmentsPath();
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception $e) {
-            // If checking master.db fails, continue with current database
-            error_log("Failed to check shared_links: " . $e->getMessage());
-        }
+        $isPubliclyShared = $this->authorizePublicAttachmentAccess((int)$noteId);
         
         // If not publicly shared, require authentication
         if (!$isPubliclyShared) {
@@ -451,6 +355,268 @@ class AttachmentsController {
             http_response_code(500);
             exit('Error: ' . $e->getMessage());
         }
+    }
+
+    private function authorizePublicAttachmentAccess(int $noteId): bool {
+        $noteToken = trim((string)($_GET['token'] ?? ''));
+        $folderToken = trim((string)($_GET['folder_token'] ?? ''));
+
+        try {
+            if ($noteToken !== '' && $this->authorizePublicNoteAttachment($noteId, $noteToken)) {
+                return true;
+            }
+
+            if ($folderToken !== '' && $this->authorizePublicFolderAttachment($noteId, $folderToken)) {
+                return true;
+            }
+        } catch (Exception $e) {
+            error_log('Failed to authorize public attachment: ' . $e->getMessage());
+        }
+
+        return false;
+    }
+
+    private function authorizePublicNoteAttachment(int $noteId, string $token): bool {
+        $registryRow = $this->getSharedLinkRegistryRow($token, 'note');
+        $ownerId = null;
+
+        if ($registryRow) {
+            if ((int)$registryRow['target_id'] !== $noteId) {
+                return false;
+            }
+            $ownerId = (int)$registryRow['user_id'];
+            if (!$this->switchToUserData($ownerId)) {
+                return false;
+            }
+        }
+
+        $stmt = $this->con->prepare('SELECT note_id, password, allowed_users FROM shared_notes WHERE token = ? AND note_id = ? AND access_mode IS NOT NULL LIMIT 1');
+        $stmt->execute([$token, $noteId]);
+        $sharedNote = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$sharedNote) {
+            return false;
+        }
+
+        $ownerId = $ownerId ?? $this->getActiveOwnerId();
+        $passedUserRestriction = false;
+        if (!$this->validateAllowedUsers($sharedNote['allowed_users'] ?? null, $ownerId, $passedUserRestriction)) {
+            return false;
+        }
+
+        if (!$this->validatePublicPassword($sharedNote['password'] ?? null, 'public_note_auth_' . $token)) {
+            return false;
+        }
+
+        return $this->validateProtectedFolderContext($noteId, $ownerId, $passedUserRestriction);
+    }
+
+    private function authorizePublicFolderAttachment(int $noteId, string $token): bool {
+        $registryRow = $this->getSharedLinkRegistryRow($token, 'folder');
+        $ownerId = null;
+
+        if ($registryRow) {
+            $ownerId = (int)$registryRow['user_id'];
+            if (!$this->switchToUserData($ownerId)) {
+                return false;
+            }
+        }
+
+        $stmt = $this->con->prepare('SELECT folder_id, password, allowed_users FROM shared_folders WHERE token = ? LIMIT 1');
+        $stmt->execute([$token]);
+        $sharedFolder = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$sharedFolder) {
+            return false;
+        }
+
+        if ($registryRow && (int)$registryRow['target_id'] !== (int)$sharedFolder['folder_id']) {
+            return false;
+        }
+
+        if (!$this->noteBelongsToSharedFolder($noteId, (int)$sharedFolder['folder_id'])) {
+            return false;
+        }
+
+        $ownerId = $ownerId ?? $this->getActiveOwnerId();
+        $passedUserRestriction = false;
+        if (!$this->validateAllowedUsers($sharedFolder['allowed_users'] ?? null, $ownerId, $passedUserRestriction)) {
+            return false;
+        }
+
+        if (!$passedUserRestriction && !$this->validatePublicPassword($sharedFolder['password'] ?? null, 'public_folder_auth_' . $token)) {
+            return false;
+        }
+
+        return $this->validateProtectedFolderContext($noteId, $ownerId, $passedUserRestriction);
+    }
+
+    private function getSharedLinkRegistryRow(string $token, string $targetType): ?array {
+        try {
+            require_once __DIR__ . '/../../../users/db_master.php';
+            $masterCon = getMasterConnection();
+            $stmt = $masterCon->prepare('SELECT user_id, target_type, target_id FROM shared_links WHERE token = ? AND target_type = ? LIMIT 1');
+            $stmt->execute([$token, $targetType]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $row ?: null;
+        } catch (Exception $e) {
+            error_log('Failed to read shared link registry: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    private function switchToUserData(int $userId): bool {
+        if ($userId <= 0) {
+            return false;
+        }
+
+        require_once __DIR__ . '/../../../users/UserDataManager.php';
+        $userDataManager = new UserDataManager($userId);
+        $dbPath = $userDataManager->getUserDatabasePath();
+
+        $this->con = new PDO('sqlite:' . $dbPath);
+        $this->con->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $this->con->exec('PRAGMA busy_timeout = 5000');
+        $this->con->exec('PRAGMA foreign_keys = ON');
+        $this->attachmentsDir = $userDataManager->getUserAttachmentsPath();
+        $GLOBALS['activeUserId'] = $userId;
+
+        return true;
+    }
+
+    private function getActiveOwnerId(): ?int {
+        if (isset($GLOBALS['activeUserId']) && $GLOBALS['activeUserId'] !== null) {
+            return (int)$GLOBALS['activeUserId'];
+        }
+        if (isset($_SESSION['user_id'])) {
+            return (int)$_SESSION['user_id'];
+        }
+
+        return null;
+    }
+
+    private function validateAllowedUsers($allowedUsersRaw, ?int $ownerId, bool &$passedUserRestriction): bool {
+        $passedUserRestriction = false;
+        $allowedUserIds = $this->decodeAllowedUserIds($allowedUsersRaw);
+        if (empty($allowedUserIds)) {
+            return true;
+        }
+
+        $currentUserId = $_SESSION['user_id'] ?? null;
+        if ($currentUserId === null) {
+            return false;
+        }
+
+        if ($ownerId !== null && (int)$currentUserId === (int)$ownerId) {
+            $passedUserRestriction = true;
+            return true;
+        }
+
+        $passedUserRestriction = in_array((int)$currentUserId, $allowedUserIds, true);
+        return $passedUserRestriction;
+    }
+
+    private function decodeAllowedUserIds($allowedUsersRaw): array {
+        if (empty($allowedUsersRaw)) {
+            return [];
+        }
+
+        $decoded = is_array($allowedUsersRaw) ? $allowedUsersRaw : json_decode((string)$allowedUsersRaw, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_map('intval', $decoded)));
+    }
+
+    private function validatePublicPassword($passwordHash, string $sessionKey): bool {
+        if (empty($passwordHash)) {
+            return true;
+        }
+
+        return !empty($_SESSION[$sessionKey]);
+    }
+
+    private function validateProtectedFolderContext(int $noteId, ?int $ownerId, bool $passedUserRestriction): bool {
+        $protectedFolderContext = $this->getProtectedFolderContext($noteId);
+        if (!$protectedFolderContext) {
+            return true;
+        }
+
+        $passedFolderRestriction = false;
+        if (!$passedUserRestriction && !$this->validateAllowedUsers($protectedFolderContext['allowed_users'] ?? null, $ownerId, $passedFolderRestriction)) {
+            return false;
+        }
+
+        if ($passedFolderRestriction) {
+            $passedUserRestriction = true;
+        }
+
+        if (!$passedUserRestriction && !empty($protectedFolderContext['password']) && !empty($protectedFolderContext['token'])) {
+            return $this->validatePublicPassword($protectedFolderContext['password'], 'public_folder_auth_' . $protectedFolderContext['token']);
+        }
+
+        return true;
+    }
+
+    private function getProtectedFolderContext(int $noteId): ?array {
+        $stmt = $this->con->prepare('SELECT folder_id FROM entries WHERE id = ? AND trash = 0');
+        $stmt->execute([$noteId]);
+        $noteFolderData = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$noteFolderData || $noteFolderData['folder_id'] === null) {
+            return null;
+        }
+
+        $stmt = $this->con->prepare(
+            'WITH RECURSIVE folder_path(id, parent_id, depth) AS (
+                SELECT f.id, f.parent_id, 0
+                FROM folders f
+                WHERE f.id = ?
+                UNION ALL
+                SELECT parent.id, parent.parent_id, folder_path.depth + 1
+                FROM folders parent
+                INNER JOIN folder_path ON folder_path.parent_id = parent.id
+            )
+            SELECT sf.token, sf.password, sf.allowed_users, folder_path.depth
+            FROM folder_path
+            INNER JOIN shared_folders sf ON sf.folder_id = folder_path.id
+            WHERE (sf.password IS NOT NULL AND sf.password != "")
+               OR (sf.allowed_users IS NOT NULL AND sf.allowed_users != "")
+            ORDER BY folder_path.depth ASC
+            LIMIT 1'
+        );
+        $stmt->execute([(int)$noteFolderData['folder_id']]);
+        $context = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $context ?: null;
+    }
+
+    private function noteBelongsToSharedFolder(int $noteId, int $sharedFolderId): bool {
+        $stmt = $this->con->prepare('SELECT folder_id FROM entries WHERE id = ? AND trash = 0');
+        $stmt->execute([$noteId]);
+        $noteRow = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$noteRow || $noteRow['folder_id'] === null) {
+            return false;
+        }
+
+        $currentFolderId = (int)$noteRow['folder_id'];
+        $visited = [];
+
+        while ($currentFolderId && !isset($visited[$currentFolderId])) {
+            if ($currentFolderId === $sharedFolderId) {
+                return true;
+            }
+
+            $visited[$currentFolderId] = true;
+            $stmt = $this->con->prepare('SELECT parent_id FROM folders WHERE id = ?');
+            $stmt->execute([$currentFolderId]);
+            $folderRow = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$folderRow || $folderRow['parent_id'] === null) {
+                break;
+            }
+
+            $currentFolderId = (int)$folderRow['parent_id'];
+        }
+
+        return false;
     }
     
     /**

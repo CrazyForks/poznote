@@ -189,6 +189,10 @@
         return block;
     }
 
+    function canDeleteCodeBlock(block) {
+        return !!(block && block.closest('.noteentry'));
+    }
+
     // Add copy button to code blocks
     function addCopyButtonToCodeBlocks() {
         // Find all code blocks
@@ -201,6 +205,7 @@
             }
 
             var actionHost = ensureCodeBlockActionHost(block);
+            var allowDelete = canDeleteCodeBlock(block);
             
             // Check if button already exists
             var existingBtn = block.querySelector('.code-block-copy-btn') || actionHost.querySelector('.code-block-copy-btn');
@@ -236,30 +241,36 @@
                 actionHost.appendChild(btn);
             }
 
-            var deleteBtnLabel = tl('editor.code_block_delete.title', 'Delete code block');
-
-            if (existingDelBtn) {
-                delBtn = existingDelBtn;
-                var newDelBtn = delBtn.cloneNode(true);
-                delBtn.parentNode.replaceChild(newDelBtn, delBtn);
-                delBtn = newDelBtn;
-                delBtn.setAttribute('aria-label', deleteBtnLabel);
-                delBtn.setAttribute('title', deleteBtnLabel);
-                delBtn.innerHTML = DELETE_ICON_SVG;
-            } else {
-                delBtn = document.createElement('button');
-                delBtn.className = 'code-block-delete-btn';
-                delBtn.setAttribute('type', 'button');
-                delBtn.setAttribute('aria-label', deleteBtnLabel);
-                delBtn.setAttribute('title', deleteBtnLabel);
-                delBtn.innerHTML = DELETE_ICON_SVG;
-            }
-
-            if (delBtn.parentNode !== actionHost) {
-                if (delBtn.parentNode) {
-                    delBtn.parentNode.removeChild(delBtn);
+            if (!allowDelete) {
+                if (existingDelBtn && existingDelBtn.parentNode) {
+                    existingDelBtn.parentNode.removeChild(existingDelBtn);
                 }
-                actionHost.appendChild(delBtn);
+            } else {
+                var deleteBtnLabel = tl('editor.code_block_delete.title', 'Delete code block');
+
+                if (existingDelBtn) {
+                    delBtn = existingDelBtn;
+                    var newDelBtn = delBtn.cloneNode(true);
+                    delBtn.parentNode.replaceChild(newDelBtn, delBtn);
+                    delBtn = newDelBtn;
+                    delBtn.setAttribute('aria-label', deleteBtnLabel);
+                    delBtn.setAttribute('title', deleteBtnLabel);
+                    delBtn.innerHTML = DELETE_ICON_SVG;
+                } else {
+                    delBtn = document.createElement('button');
+                    delBtn.className = 'code-block-delete-btn';
+                    delBtn.setAttribute('type', 'button');
+                    delBtn.setAttribute('aria-label', deleteBtnLabel);
+                    delBtn.setAttribute('title', deleteBtnLabel);
+                    delBtn.innerHTML = DELETE_ICON_SVG;
+                }
+
+                if (delBtn.parentNode !== actionHost) {
+                    if (delBtn.parentNode) {
+                        delBtn.parentNode.removeChild(delBtn);
+                    }
+                    actionHost.appendChild(delBtn);
+                }
             }
             
             // Add/re-attach click handler for copy
@@ -296,6 +307,10 @@
             });
 
             // Add delete click handler
+            if (!allowDelete || !delBtn) {
+                return;
+            }
+
             delBtn.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();

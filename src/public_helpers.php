@@ -42,6 +42,81 @@ function escapePublicStatusText($text) {
     return htmlspecialchars($decoded, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function getPublicHtmlAttributeValue(string $attrs, string $name): string {
+    $pattern = '/(?:^|\s)' . preg_quote($name, '/') . '\s*=\s*(["\'])(.*?)\1/is';
+    if (!preg_match($pattern, $attrs, $matches)) {
+        return '';
+    }
+
+    return html_entity_decode($matches[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+}
+
+function buildPublicAudioAttachmentUrlFromPlayerSrc(string $playerSrc): string {
+    $decodedSrc = html_entity_decode(trim($playerSrc), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    if ($decodedSrc === '') {
+        return '';
+    }
+
+    $parts = parse_url($decodedSrc);
+    $path = $parts['path'] ?? '';
+    if ($path === '' || !preg_match('#(?:^|/+)audio_player\.php$#i', $path)) {
+        return '';
+    }
+
+    parse_str($parts['query'] ?? '', $query);
+    $noteId = isset($query['note']) ? (int)$query['note'] : 0;
+    $attachmentId = isset($query['attachment']) ? trim((string)$query['attachment']) : '';
+    if ($noteId <= 0 || $attachmentId === '') {
+        return '';
+    }
+
+    unset($query['note'], $query['attachment']);
+
+    $url = '/api/v1/notes/' . rawurlencode((string)$noteId) . '/attachments/' . rawurlencode($attachmentId);
+    if (!empty($query)) {
+        $url .= '?' . http_build_query($query);
+    }
+
+    return $url;
+}
+
+function buildPublicAudioTagFromIframeAttrs(string $attrs): ?string {
+    $decodedAttrs = html_entity_decode($attrs, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $classAttr = getPublicHtmlAttributeValue($decodedAttrs, 'class');
+    $isAudioEmbed = stripos($decodedAttrs, 'data-is-audio') !== false
+        || preg_match('/(?:^|\s)note-audio-embed(?:\s|$)/i', $classAttr);
+
+    if (!$isAudioEmbed) {
+        return null;
+    }
+
+    $audioSrc = getPublicHtmlAttributeValue($decodedAttrs, 'data-audio-src');
+    if ($audioSrc === '') {
+        $audioSrc = buildPublicAudioAttachmentUrlFromPlayerSrc(getPublicHtmlAttributeValue($decodedAttrs, 'src'));
+    }
+
+    if ($audioSrc === '') {
+        return null;
+    }
+
+    return '<audio controls preload="metadata" src="' . htmlspecialchars($audioSrc, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"></audio>';
+}
+
+function replacePublicAudioEmbedIframes(string $content): string {
+    if ($content === '') {
+        return $content;
+    }
+
+    $replaceCallback = function(array $matches): string {
+        $audioTag = buildPublicAudioTagFromIframeAttrs($matches[1] ?? '');
+        return $audioTag !== null ? $audioTag : $matches[0];
+    };
+
+    $content = preg_replace_callback('/<iframe\b([^>]*)>\s*<\/iframe>/is', $replaceCallback, $content);
+
+    return preg_replace_callback('/&lt;iframe\b([\s\S]*?)&gt;\s*&lt;\/iframe&gt;/i', $replaceCallback, $content);
+}
+
 function renderPublicStatusPage($currentLang, array $options = []) {
     http_response_code($options['status'] ?? 403);
 

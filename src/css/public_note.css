@@ -104,7 +104,26 @@ body.public-note-page {
     margin: 10px 0;
 }
 
-.public-note audio,
+.public-note audio {
+    max-width: 280px;
+    width: 100%;
+    height: 54px;
+    display: block;
+    overflow: hidden;
+    margin: 8px 0;
+    padding: 0;
+    border: 1px solid #d0d7de;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: #ffffff;
+}
+
+.public-note audio::-webkit-media-controls-enclosure,
+.public-note audio::-webkit-media-controls-panel {
+    border-radius: inherit;
+    background: #ffffff;
+}
+
 .public-note .note-audio-embed {
     max-width: 280px;
     display: block;
@@ -265,21 +284,29 @@ table th {
 .public-note .content code {
     background-color: transparent;
     padding: 2px 6px;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: "Segoe UI Mono", "SF Mono", Monaco, Menlo, Consolas, "Ubuntu Mono", "Liberation Mono", "Courier New", monospace !important;
     font-size: 0.9em;
     color: #333;
     border-radius: 3px;
 }
 
 .public-note .content pre {
-    background-color: transparent !important;
-    padding: 12px;
+    font-family: "Segoe UI Mono", "SF Mono", Monaco, Menlo, Consolas, "Ubuntu Mono", "Liberation Mono", "Courier New", monospace !important;
+    background: #F8FAFC !important;
+    padding: 30px !important;
+    padding-bottom: 20px !important;
     border-radius: 4px;
     overflow-x: auto;
-    margin: 0.5em 0;
+    margin: 0.75em 0;
     position: relative;
-    border: 1px solid #e0e0e0;
-    white-space: pre;
+    border: 1px solid #e9ecef;
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    font-size: var(--code-block-font-size, 15px) !important;
+    color: #333;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* Extra padding for code blocks with language badge */
@@ -289,12 +316,14 @@ table th {
 
 .public-note .content pre code {
     background-color: transparent !important;
-    padding: 0;
+    padding: 0 !important;
     color: inherit;
-    border-radius: 0;
-    border: none;
+    border-radius: 0 !important;
+    border: none !important;
     display: block;
     line-height: 1.4;
+    white-space: inherit !important;
+    font-size: inherit !important;
 }
 
 /* Remove Highlight.js background in public notes */
@@ -304,7 +333,7 @@ table th {
 }
 
 /* Copy button for code blocks */
-.public-note .content pre .code-block-copy-btn,
+.public-note .content .code-block-copy-btn,
 .code-block-copy-btn {
     position: absolute;
     top: 8px;
@@ -324,20 +353,37 @@ table th {
     z-index: 10;
 }
 
-.public-note .content pre .code-block-copy-btn:hover,
+.public-note .content .code-block-copy-btn {
+    background: transparent;
+    border: none;
+    color: #8a8f98;
+}
+
+.public-note .content .code-block-copy-btn:hover,
 .code-block-copy-btn:hover {
     background-color: #fff;
     color: #333;
 }
 
-.public-note .content pre .code-block-copy-btn.copied,
+.public-note .content .code-block-copy-btn:hover {
+    background: transparent;
+    border: none;
+}
+
+.public-note .content .code-block-copy-btn.copied,
 .code-block-copy-btn.copied {
     background-color: #4caf50;
     color: white;
     border-color: #4caf50;
 }
 
-.public-note .content pre .code-block-copy-btn svg,
+.public-note .content .code-block-copy-btn.copied {
+    background: transparent;
+    border: none;
+    color: #28a745;
+}
+
+.public-note .content .code-block-copy-btn svg,
 .code-block-copy-btn svg {
     width: 16px;
     height: 16px;
@@ -563,11 +609,14 @@ table th {
     align-items: center;
     margin-left: 0.45em;
     vertical-align: middle;
+    color: inherit;
+    text-decoration: none;
 }
 
 .public-note .content .heading-anchor svg {
     width: 0.4em;
     height: 0.4em;
+    fill: currentColor;
 }
 
 /* Paragraphs */
@@ -581,6 +630,94 @@ table th {
     margin: 0;
     min-height: 1.2em; /* Match the line-height */
     line-height: 1.2;
+}
+
+.public-note-attachments-row {
+    margin-top: 0;
+    margin-bottom: 14px;
+}
+
+.public-note-attachments {
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid #d8dee4;
+}
+
+.public-note-attachments h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.public-note-attachments-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.public-note-attachment-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+    padding: 9px 12px;
+    border: 1px solid #d8dee4;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #0f172a;
+    text-decoration: none;
+    transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.public-note-attachment-link:hover,
+.public-note-attachment-link:focus {
+    border-color: #007db8;
+    background: #f7fbfd;
+    color: #005a8b;
+    text-decoration: none;
+}
+
+.public-note-attachment-link i {
+    flex: 0 0 auto;
+    color: #64748b;
+}
+
+.public-note-attachment-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.public-note-attachment-size {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+@media screen and (max-width: 520px) {
+    .public-note-attachment-link {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .public-note-attachment-name {
+        flex: 1 1 calc(100% - 28px);
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .public-note-attachment-size {
+        flex-basis: 100%;
+        margin-left: 28px;
+    }
 }
 
 /* Theme toggle button */
@@ -627,6 +764,65 @@ html[data-theme='dark'] .theme-toggle-btn {
 html[data-theme='dark'] .theme-toggle-btn:hover {
     background: #333333;
     border-color: #666;
+}
+
+html[data-theme='dark'] .public-note audio {
+    background: #5f6368;
+    border-color: #4b5563;
+}
+
+html[data-theme='dark'] .public-note audio::-webkit-media-controls-enclosure,
+html[data-theme='dark'] .public-note audio::-webkit-media-controls-panel {
+    background: #5f6368;
+}
+
+html[data-theme='dark'] .public-note .content pre {
+    background-color: #262424 !important;
+    border-color: var(--dm-border) !important;
+    color: var(--dm-text-muted) !important;
+}
+
+html[data-theme='dark'] .public-note .content code:not([class*="hljs"]):not([class*="language-"]) {
+    background-color: var(--dm-surface);
+    color: var(--dm-text);
+    border-color: var(--dm-border);
+}
+
+html[data-theme='dark'] .public-note .content pre code:not([class*="hljs"]):not([class*="language-"]) {
+    background-color: transparent !important;
+    color: var(--dm-text-muted) !important;
+    border-color: transparent !important;
+}
+
+html[data-theme='dark'] .public-note .content pre code[class*="language-"],
+html[data-theme='dark'] .public-note .content code[class*="language-"] {
+    color: var(--dm-text-muted) !important;
+}
+
+html[data-theme='dark'] .public-note-attachments {
+    border-bottom-color: #404040;
+}
+
+html[data-theme='dark'] .public-note-attachments h2 {
+    color: #e5e7eb;
+}
+
+html[data-theme='dark'] .public-note-attachment-link {
+    border-color: #404040;
+    background: #1f2937;
+    color: #e5e7eb;
+}
+
+html[data-theme='dark'] .public-note-attachment-link:hover,
+html[data-theme='dark'] .public-note-attachment-link:focus {
+    border-color: #38bdf8;
+    background: #243447;
+    color: #bae6fd;
+}
+
+html[data-theme='dark'] .public-note-attachment-link i,
+html[data-theme='dark'] .public-note-attachment-size {
+    color: #9ca3af;
 }
 
 /* Dark mode styles for important tasks */
@@ -707,4 +903,8 @@ html[data-theme='dark'] .public-note .content table th {
 html[data-theme='dark'] .public-note .content table td {
     background: #252526 !important;
     color: #e0e0e0 !important;
+}
+
+html[data-theme='dark'] .public-note .content .heading-anchor {
+    color: #e5e7eb;
 }

@@ -936,60 +936,85 @@ function parseMarkdown(text) {
         return placeholder;
     });
 
-    // Protect iframe tags (for YouTube, Vimeo, and other embeds)
-    // Only allow iframes from trusted sources for security
-    text = text.replace(/<iframe\s+([^>]+)>\s*<\/iframe>/gis, function (match, attrs) {
-        // Extract src attribute to validate the source
-        const srcMatch = attrs.match(/src\s*=\s*["']([^"']+)["']/i);
-        if (srcMatch) {
-            const src = srcMatch[1];
+    function decodeHtmlEntities(value) {
+        if (!value || value.indexOf('&') === -1) return value || '';
+        var textarea = document.createElement('textarea');
+        textarea.innerHTML = value;
+        return textarea.value;
+    }
 
-            // Whitelist of allowed iframe sources (trusted embed providers)
-            // Synchronized with PHP's ALLOWED_IFRAME_DOMAINS via window object
-            const allowedDomains = window.ALLOWED_IFRAME_DOMAINS || [];
+    function getTagAttribute(attrs, name) {
+        var escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var re = new RegExp("(?:^|\\s)" + escapedName + "\\s*=\\s*([\"'])(.*?)\\1", 'i');
+        var match = attrs.match(re);
+        return match ? match[2] : '';
+    }
 
-            // Check if the src matches any allowed domain or local audio player
-            const isLocalAudioPlayer =
-                src.startsWith('/audio_player.php') ||
-                src.startsWith('./audio_player.php') ||
-                src.startsWith('../audio_player.php');
+    function isAllowedIframeSrc(src) {
+        src = (src || '').trim();
+        if (!src) return false;
 
-            const isAllowed = isLocalAudioPlayer || allowedDomains.some(domain =>
-                src.includes('//' + domain) || src.includes('.' + domain)
-            );
+        var lowerSrc = src.toLowerCase();
+        var isLocalAudioPlayer = /^(?:\/|\.\/|\.\.\/)?audio_player\.php(?:[?#]|$)/.test(lowerSrc);
+        if (isLocalAudioPlayer) return true;
 
-            if (isAllowed) {
-                const placeholder = '\x00PIFRAME' + protectedIndex + '\x00';
+        var allowedDomains = window.ALLOWED_IFRAME_DOMAINS || [];
+        try {
+            var parsed = new URL(src, window.location.origin);
+            var host = parsed.hostname.toLowerCase();
+            return allowedDomains.some(function (domain) {
+                domain = String(domain).toLowerCase();
+                return host === domain || host.endsWith('.' + domain);
+            });
+        } catch (e) {
+            return allowedDomains.some(function (domain) {
+                return src.includes('//' + domain) || src.includes('.' + domain);
+            });
+        }
+    }
 
-                // Sanitize attributes: only allow safe attributes
-                const safeAttrs = [];
-                const attrRegex = /(\w+)\s*=\s*["']([^"']*)["']/g;
-                let attrMatch;
+    function protectIframeTag(attrs, original) {
+        attrs = decodeHtmlEntities(attrs);
+        var src = getTagAttribute(attrs, 'src');
+        if (!isAllowedIframeSrc(src)) return original;
 
-                while ((attrMatch = attrRegex.exec(attrs)) !== null) {
-                    const attrName = attrMatch[1].toLowerCase();
-                    const attrValue = attrMatch[2];
+        var placeholder = '\x00PIFRAME' + protectedIndex + '\x00';
+        var safeAttrs = [];
+        var allowedAttrs = [
+            'src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen',
+            'title', 'loading', 'referrerpolicy', 'sandbox', 'style', 'class',
+            'scrolling', 'contenteditable', 'data-is-audio', 'data-audio-src',
+            'data-converted-from-audio'
+        ];
+        var attrRegex = /([\w-]+)\s*=\s*["']([^"']*)["']/g;
+        var attrMatch;
 
-                    // Only allow safe attributes
-                    if (['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen', 'title', 'loading', 'referrerpolicy', 'sandbox', 'style', 'class'].includes(attrName)) {
-                        safeAttrs.push(attrName + '="' + attrValue + '"');
-                    }
-                }
-
-                // Handle boolean attributes like allowfullscreen
-                if (/allowfullscreen/i.test(attrs) && !safeAttrs.some(attr => attr.startsWith('allowfullscreen'))) {
-                    safeAttrs.push('allowfullscreen');
-                }
-
-                const iframeTag = '<iframe ' + safeAttrs.join(' ') + '></iframe>';
-                protectedElements[protectedIndex] = iframeTag;
-                protectedIndex++;
-                return placeholder;
+        while ((attrMatch = attrRegex.exec(attrs)) !== null) {
+            var attrName = attrMatch[1].toLowerCase();
+            var attrValue = attrMatch[2];
+            if (allowedAttrs.includes(attrName)) {
+                safeAttrs.push(attrName + '="' + escapeHtml(attrValue) + '"');
             }
         }
 
-        // If not allowed, return the original (will be escaped)
-        return match;
+        if (/allowfullscreen/i.test(attrs) && !safeAttrs.some(function (attr) { return attr.startsWith('allowfullscreen'); })) {
+            safeAttrs.push('allowfullscreen');
+        }
+
+        protectedElements[protectedIndex] = '<iframe ' + safeAttrs.join(' ') + '></iframe>';
+        protectedIndex++;
+        return placeholder;
+    }
+
+    // Protect iframe tags (YouTube, Bilibili, and Poznote audio player embeds).
+    text = text.replace(/<iframe\s+([^>]+)>\s*<\/iframe>/gis, function (match, attrs) {
+        return protectIframeTag(attrs, match);
+    });
+
+    // Some saved/draft Markdown content can contain escaped media HTML.
+    // Decode only validated iframe tags; everything else remains escaped below.
+    text = text.replace(/&lt;iframe\s+([\s\S]*?)&gt;\s*&lt;\/iframe&gt;/gi, function (match, attrs) {
+        return protectIframeTag(attrs, match);
     });
 
     // Now escape HTML to prevent XSS
@@ -1524,13 +1549,13 @@ function parseMarkdown(text) {
             continue;
         }
 
-        // Tables - detect table rows (supports multiline cells until the row closes with a trailing |)
-        if (line.match(/^\s*\|/)) {
+        // Tables - require a header separator row so plain pipe-delimited text stays editable as text.
+        if (line.match(/^\s*\|/) && i + 1 < lines.length && lines[i + 1].trim().match(/^\|[\s\-:|]+\|$/)) {
             flushParagraph();
 
             let tableRows = [];
+            let tableAlignments = [];
             let isFirstRow = true;
-            let hasHeaderSeparator = false;
 
             // Collect all consecutive table rows
             while (i < lines.length && lines[i].match(/^\s*\|/)) {
@@ -1538,7 +1563,18 @@ function parseMarkdown(text) {
 
                 // Check if this is a header separator line (|---|---|)
                 if (currentLine.match(/^\|[\s\-:|]+\|$/)) {
-                    hasHeaderSeparator = true;
+                    tableAlignments = currentLine
+                        .split('|')
+                        .slice(1, -1)
+                        .map(function (cell) {
+                            let marker = cell.trim();
+                            let alignLeft = marker.startsWith(':');
+                            let alignRight = marker.endsWith(':');
+                            if (alignLeft && alignRight) return 'center';
+                            if (alignRight) return 'right';
+                            if (alignLeft) return 'left';
+                            return '';
+                        });
                     i++;
                     continue;
                 }
@@ -1562,7 +1598,7 @@ function parseMarkdown(text) {
 
                 tableRows.push({
                     cells: cells,
-                    isHeader: isFirstRow && !hasHeaderSeparator
+                    isHeader: isFirstRow
                 });
 
                 if (isFirstRow) {
@@ -1576,18 +1612,19 @@ function parseMarkdown(text) {
             // Generate HTML table
             if (tableRows.length > 0) {
                 let tableHTML = '<table>';
-                let hasHeader = hasHeaderSeparator || tableRows[0].isHeader;
 
                 // Process rows
                 for (let r = 0; r < tableRows.length; r++) {
                     let row = tableRows[r];
-                    let isHeaderRow = (r === 0 && hasHeader);
+                    let isHeaderRow = (r === 0 && row.isHeader);
                     let cellTag = isHeaderRow ? 'th' : 'td';
 
                     tableHTML += '<tr>';
                     for (let c = 0; c < row.cells.length; c++) {
                         let cellContent = applyInlineStyles(row.cells[c]);
-                        tableHTML += '<' + cellTag + '>' + cellContent + '</' + cellTag + '>';
+                        let alignment = tableAlignments[c];
+                        let alignAttr = alignment ? ' style="text-align: ' + alignment + ';"' : '';
+                        tableHTML += '<' + cellTag + alignAttr + '>' + cellContent + '</' + cellTag + '>';
                     }
                     tableHTML += '</tr>';
                 }

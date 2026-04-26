@@ -1771,7 +1771,7 @@ function sanitizeHtml($html) {
         'time' => ['datetime'],
         'blockquote' => ['cite'],
         'q' => ['cite'],
-        'iframe' => ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen', 'allowtransparency', 'title', 'sandbox'],
+        'iframe' => ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen', 'allowtransparency', 'title', 'sandbox', 'loading', 'referrerpolicy', 'style', 'class', 'scrolling', 'contenteditable', 'data-is-audio', 'data-audio-src', 'data-converted-from-audio'],
         'video' => ['src', 'width', 'height', 'preload', 'poster', 'class', 'style', 'controls', 'muted', 'playsinline', 'loop', 'autoplay'],
         'audio' => ['src', 'preload', 'class', 'style', 'controls', 'muted', 'loop', 'autoplay'],
         'button' => ['class', 'data-action'],
@@ -1876,7 +1876,7 @@ function sanitizeHtml($html) {
                     $isTrustedIframe = false;
                     
                     // Allow local/relative paths (e.g., /audio_player.php)
-                    if (strpos($attrValue, '/') === 0 || strpos($attrValue, './') === 0) {
+                    if (strpos($attrValue, '/') === 0 || strpos($attrValue, './') === 0 || preg_match('#^audio_player\.php(?:[?#]|$)#i', $attrValue)) {
                         $isTrustedIframe = true;
                     } else {
                         // Check trusted domains

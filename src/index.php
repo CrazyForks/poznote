@@ -760,6 +760,8 @@ $body_classes = trim($extra_body_classes);
                     // Dropdown menu (actions moved here - visible on both mobile and desktop)
                     echo '<div class="dropdown-menu mobile-toolbar-menu" hidden role="menu" aria-label="'.t_h('index.toolbar.menu_actions', [], 'Menu actions').'">';
 
+                    echo '<button type="button" class="dropdown-item mobile-toolbar-item" role="menuitem" data-action="open-markdown-syntax"><i class="lucide lucide-book-open"></i> '.t_h('markdown_syntax.menu_item', [], 'Markdown syntax').'</button>';
+
                     // Search and replace button (only for note and markdown types, shown in mobile menu)
                     if ($note_type === 'note' || $note_type === 'markdown') {
                         echo '<button type="button" class="dropdown-item mobile-toolbar-item" role="menuitem" data-action="trigger-mobile-action" data-selector=".btn-search-replace"><i class="lucide lucide-search"></i> '.t_h('editor.toolbar.search_replace', [], 'Search and replace').'</button>';
