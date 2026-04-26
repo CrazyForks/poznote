@@ -17,6 +17,8 @@ $currentLanguage = getUserLanguage();
 $pageTranslations = [
     'en' => [
         'intro' => 'This page lists the Markdown and safe HTML syntax supported by Poznote preview, with an example for each item.',
+        'filter_placeholder' => 'Filter syntax examples...',
+        'no_results' => 'No syntax examples match your search.',
         'nav_label' => 'Markdown syntax sections',
         'nav' => [
             'text' => 'Text',
@@ -60,6 +62,8 @@ $pageTranslations = [
     ],
     'fr' => [
         'intro' => 'Cette page récapitule la syntaxe Markdown et HTML sûre prise en charge par la prévisualisation Poznote, avec un exemple pour chaque élément.',
+        'filter_placeholder' => 'Filtrer les exemples de syntaxe...',
+        'no_results' => 'Aucun exemple de syntaxe ne correspond à votre recherche.',
         'nav_label' => 'Sections de syntaxe Markdown',
         'nav' => [
             'text' => 'Texte',
@@ -103,6 +107,8 @@ $pageTranslations = [
     ],
     'de' => [
         'intro' => 'Diese Seite fasst die von der Poznote-Vorschau unterstützte Markdown- und sichere HTML-Syntax zusammen, jeweils mit einem Beispiel.',
+        'filter_placeholder' => 'Syntaxbeispiele filtern...',
+        'no_results' => 'Keine Syntaxbeispiele entsprechen Ihrer Suche.',
         'nav_label' => 'Markdown-Syntaxabschnitte',
         'nav' => [
             'text' => 'Text',
@@ -146,6 +152,8 @@ $pageTranslations = [
     ],
     'es' => [
         'intro' => 'Esta página resume la sintaxis Markdown y HTML segura compatible con la vista previa de Poznote, con un ejemplo para cada elemento.',
+        'filter_placeholder' => 'Filtrar ejemplos de sintaxis...',
+        'no_results' => 'Ningún ejemplo de sintaxis coincide con su búsqueda.',
         'nav_label' => 'Secciones de sintaxis Markdown',
         'nav' => [
             'text' => 'Texto',
@@ -189,6 +197,8 @@ $pageTranslations = [
     ],
     'pt' => [
         'intro' => 'Esta página resume a sintaxe Markdown e HTML segura suportada pela visualização do Poznote, com um exemplo para cada item.',
+        'filter_placeholder' => 'Filtrar exemplos de sintaxe...',
+        'no_results' => 'Nenhum exemplo de sintaxe corresponde à sua pesquisa.',
         'nav_label' => 'Seções de sintaxe Markdown',
         'nav' => [
             'text' => 'Texto',
@@ -232,6 +242,8 @@ $pageTranslations = [
     ],
     'ru' => [
         'intro' => 'На этой странице собраны синтаксис Markdown и безопасный HTML, поддерживаемые предпросмотром Poznote, с примером для каждого элемента.',
+        'filter_placeholder' => 'Фильтровать примеры синтаксиса...',
+        'no_results' => 'Нет примеров синтаксиса, соответствующих вашему запросу.',
         'nav_label' => 'Разделы синтаксиса Markdown',
         'nav' => [
             'text' => 'Текст',
@@ -275,6 +287,8 @@ $pageTranslations = [
     ],
     'zh-cn' => [
         'intro' => '此页面汇总了 Poznote 预览支持的 Markdown 和安全 HTML 语法，并为每一项提供示例。',
+        'filter_placeholder' => '筛选语法示例...',
+        'no_results' => '没有与您的搜索匹配的语法示例。',
         'nav_label' => 'Markdown 语法分区',
         'nav' => [
             'text' => '文本',
@@ -325,6 +339,9 @@ if (!isset($pageTranslations[$currentLanguage])) {
 
 $copy = $pageTranslations[$currentLanguage];
 
+$filterPlaceholder = isset($copy['filter_placeholder']) ? $copy['filter_placeholder'] : 'Filter syntax examples...';
+$noResultsText = isset($copy['no_results']) ? $copy['no_results'] : 'No syntax examples match your search.';
+
 $sections = [
     'text' => ['headings', 'emphasis', 'highlight_color_code', 'links_refs', 'images_breaks'],
     'blocks' => ['code_blocks', 'blockquotes', 'callouts', 'horizontal_rules'],
@@ -334,10 +351,15 @@ $sections = [
     'html' => ['details_summary', 'underline_linebreaks', 'iframes'],
 ];
 
-$wideCards = [
-    'basic_tables' => true,
-    'table_alignment' => true,
-];
+$cardsInOrder = [];
+foreach ($sections as $sectionId => $cardIds) {
+    foreach ($cardIds as $cardId) {
+        $cardsInOrder[] = [
+            'section_id' => $sectionId,
+            'card_id' => $cardId,
+        ];
+    }
+}
 
 $examples = [
     'headings' => "# Heading 1\n## Heading 2\n### Heading 3\n###### Heading 6",
@@ -389,27 +411,114 @@ $examples = [
         <div class="info-content markdown-syntax-content">
             <p class="markdown-syntax-intro"><?php echo htmlspecialchars($copy['intro'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
 
-            <nav class="markdown-syntax-toc" aria-label="<?php echo htmlspecialchars($copy['nav_label'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
-                <?php foreach ($sections as $sectionId => $cardIds): ?>
-                    <a href="#<?php echo htmlspecialchars($sectionId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>"><?php echo htmlspecialchars($copy['nav'][$sectionId], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a>
-                <?php endforeach; ?>
-            </nav>
+            <div class="markdown-syntax-filter-bar">
+                <div class="filter-input-wrapper">
+                    <i class="lucide lucide-search markdown-syntax-filter-icon" aria-hidden="true"></i>
+                    <input
+                        type="text"
+                        id="markdownSyntaxFilterInput"
+                        class="filter-input"
+                        placeholder="<?php echo htmlspecialchars($filterPlaceholder, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>"
+                        aria-label="<?php echo htmlspecialchars($filterPlaceholder, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>"
+                        autocomplete="off"
+                    />
+                    <button
+                        type="button"
+                        id="markdownSyntaxClearFilter"
+                        class="clear-filter-btn initially-hidden"
+                        title="<?php echo t_h('search.clear', [], 'Clear search'); ?>"
+                        aria-label="<?php echo t_h('search.clear', [], 'Clear search'); ?>"
+                    >
+                        <i class="lucide lucide-x" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div id="markdownSyntaxFilterStats" class="filter-stats initially-hidden"></div>
+            </div>
 
-            <?php foreach ($sections as $sectionId => $cardIds): ?>
-                <section id="<?php echo htmlspecialchars($sectionId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>" class="markdown-syntax-section">
-                    <h2><?php echo htmlspecialchars($copy['sections'][$sectionId], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></h2>
-                    <div class="markdown-syntax-grid">
-                        <?php foreach ($cardIds as $cardId): ?>
-                            <article class="syntax-card<?php echo !empty($wideCards[$cardId]) ? ' syntax-card-wide' : ''; ?>">
-                                <h3><?php echo htmlspecialchars($copy['cards'][$cardId]['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></h3>
-                                <p><?php echo htmlspecialchars($copy['cards'][$cardId]['description'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
-                                <pre><code><?php echo htmlspecialchars($examples[$cardId], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></code></pre>
-                            </article>
-                        <?php endforeach; ?>
-                    </div>
-                </section>
-            <?php endforeach; ?>
+            <div class="markdown-syntax-list" id="markdownSyntaxList">
+                <?php foreach ($cardsInOrder as $item): ?>
+                    <?php $sectionId = $item['section_id']; ?>
+                    <?php $cardId = $item['card_id']; ?>
+                    <article class="syntax-card" data-syntax-card>
+                        <p class="syntax-card-category"><?php echo htmlspecialchars($copy['nav'][$sectionId], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
+                        <h2><?php echo htmlspecialchars($copy['cards'][$cardId]['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></h2>
+                        <p><?php echo htmlspecialchars($copy['cards'][$cardId]['description'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
+                        <pre><code><?php echo htmlspecialchars($examples[$cardId], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></code></pre>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+
+            <p id="markdownSyntaxNoResults" class="markdown-syntax-empty initially-hidden"><?php echo htmlspecialchars($noResultsText, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
         </div>
     </div>
+
+    <script>
+    (function () {
+        var filterInput = document.getElementById('markdownSyntaxFilterInput');
+        if (!filterInput) {
+            return;
+        }
+
+        var clearButton = document.getElementById('markdownSyntaxClearFilter');
+        var filterStats = document.getElementById('markdownSyntaxFilterStats');
+        var noResults = document.getElementById('markdownSyntaxNoResults');
+        var cards = Array.prototype.slice.call(document.querySelectorAll('[data-syntax-card]'));
+        var totalCount = cards.length;
+
+        cards.forEach(function (card) {
+            card.dataset.filterText = card.textContent.toLowerCase();
+        });
+
+        function applyFilter() {
+            var filterText = filterInput.value.trim().toLowerCase();
+            var visibleCount = 0;
+
+            cards.forEach(function (card) {
+                var matches = !filterText || card.dataset.filterText.indexOf(filterText) !== -1;
+                card.hidden = !matches;
+                if (matches) {
+                    visibleCount += 1;
+                }
+            });
+
+            if (clearButton) {
+                clearButton.classList.toggle('initially-hidden', filterText === '');
+            }
+
+            if (filterStats) {
+                if (filterText) {
+                    filterStats.textContent = visibleCount + ' / ' + totalCount;
+                    filterStats.classList.remove('initially-hidden');
+                } else {
+                    filterStats.textContent = '';
+                    filterStats.classList.add('initially-hidden');
+                }
+            }
+
+            if (noResults) {
+                noResults.classList.toggle('initially-hidden', visibleCount !== 0);
+            }
+        }
+
+        filterInput.addEventListener('input', applyFilter);
+        filterInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && filterInput.value !== '') {
+                filterInput.value = '';
+                applyFilter();
+                filterInput.focus();
+            }
+        });
+
+        if (clearButton) {
+            clearButton.addEventListener('click', function () {
+                filterInput.value = '';
+                applyFilter();
+                filterInput.focus();
+            });
+        }
+
+        applyFilter();
+    })();
+    </script>
 </body>
 </html>

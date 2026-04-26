@@ -1,5 +1,5 @@
 .markdown-syntax-page {
-    max-width: 960px;
+    max-width: 880px;
 }
 
 .markdown-syntax-content {
@@ -10,59 +10,100 @@
     margin: 0 0 18px;
     color: #495057;
     line-height: 1.65;
+    max-width: 72ch;
 }
 
-.markdown-syntax-toc {
+.markdown-syntax-filter-bar {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 0 0 24px;
-    padding: 0 0 18px;
-    border-bottom: 1px solid #f0f0f0;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 22px;
 }
 
-.markdown-syntax-toc a {
-    color: #007db8;
-    text-decoration: none;
+.markdown-syntax-filter-bar .filter-input-wrapper {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.markdown-syntax-filter-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--placeholder-color, #94a3b8);
+    pointer-events: none;
+}
+
+.markdown-syntax-filter-bar .filter-input {
+    width: 100%;
+    padding: 11px 42px 11px 38px;
+    border: 1px solid #d7dee5;
+    border-radius: 10px;
     font-size: 14px;
-    font-weight: 600;
+    color: var(--text-color, #333333);
+    background: var(--input-bg, #ffffff);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
 }
 
-.markdown-syntax-toc a:hover {
-    text-decoration: underline;
+.markdown-syntax-filter-bar .filter-input:focus {
+    outline: none;
+    border-color: #007db8;
+    box-shadow: 0 0 0 3px rgba(0, 125, 184, 0.1);
 }
 
-.markdown-syntax-section + .markdown-syntax-section {
-    margin-top: 28px;
+.markdown-syntax-filter-bar .clear-filter-btn {
+    position: absolute;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 4px 6px;
+    border-radius: 6px;
+    color: #667085;
+    cursor: pointer;
 }
 
-.markdown-syntax-section h2 {
-    margin: 0 0 14px;
-    color: #333;
-    font-size: 24px;
+.markdown-syntax-filter-bar .clear-filter-btn:hover {
+    background: #eef2f6;
+    color: #1f2937;
 }
 
-.markdown-syntax-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+.markdown-syntax-filter-bar .filter-stats {
+    font-size: 13px;
+    color: var(--muted-color, #6b7280);
+    white-space: nowrap;
+}
+
+.markdown-syntax-list {
+    display: flex;
+    flex-direction: column;
     gap: 14px;
 }
 
 .syntax-card {
-    border: 1px solid #f0f0f0;
-    border-radius: 4px;
+    border: 1px solid #e9eef3;
+    border-radius: 10px;
     background: #fff;
-    padding: 16px;
+    padding: 18px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.syntax-card-wide {
-    grid-column: span 2;
+.syntax-card-category {
+    margin: 0 0 10px;
+    color: #007db8;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
-.syntax-card h3 {
+.syntax-card h2 {
     margin: 0 0 8px;
     color: #333;
-    font-size: 18px;
+    font-size: 20px;
 }
 
 .syntax-card p {
@@ -88,13 +129,28 @@
     white-space: pre;
 }
 
-@media (max-width: 800px) {
-    .markdown-syntax-grid {
-        grid-template-columns: 1fr;
+.markdown-syntax-empty {
+    margin: 0;
+    padding: 16px 18px;
+    border: 1px dashed #d7dee5;
+    border-radius: 10px;
+    background: #f8fafc;
+    color: #52606d;
+    line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+    .markdown-syntax-filter-bar {
+        flex-direction: column;
+        align-items: stretch;
     }
 
-    .syntax-card-wide {
-        grid-column: span 1;
+    .markdown-syntax-filter-bar .filter-stats {
+        align-self: flex-start;
+    }
+
+    .syntax-card {
+        padding: 16px;
     }
 }
 
@@ -103,20 +159,8 @@ body.dark-mode .markdown-syntax-intro {
     color: var(--dm-text-muted, #8b949e);
 }
 
-html[data-theme='dark'] .markdown-syntax-toc,
-body.dark-mode .markdown-syntax-toc {
-    border-bottom-color: var(--dm-border, #30363d);
-}
-
-html[data-theme='dark'] .markdown-syntax-toc a,
-body.dark-mode .markdown-syntax-toc a {
-    color: var(--dm-accent, #58a6ff);
-}
-
-html[data-theme='dark'] .markdown-syntax-section h2,
-html[data-theme='dark'] .syntax-card h3,
-body.dark-mode .markdown-syntax-section h2,
-body.dark-mode .syntax-card h3 {
+html[data-theme='dark'] .syntax-card h2,
+body.dark-mode .syntax-card h2 {
     color: var(--dm-text, #e6edf3);
 }
 
@@ -131,9 +175,21 @@ body.dark-mode .syntax-card p {
     color: var(--dm-text-muted, #8b949e);
 }
 
+html[data-theme='dark'] .syntax-card-category,
+body.dark-mode .syntax-card-category {
+    color: var(--dm-accent, #58a6ff);
+}
+
 html[data-theme='dark'] .syntax-card pre,
 body.dark-mode .syntax-card pre {
     border-color: var(--dm-border, #30363d);
     background: var(--dm-bg, #0d1117);
     color: var(--dm-text, #e6edf3);
+}
+
+html[data-theme='dark'] .markdown-syntax-empty,
+body.dark-mode .markdown-syntax-empty {
+    border-color: var(--dm-border, #30363d);
+    background: var(--dm-surface, #161b22);
+    color: var(--dm-text-muted, #8b949e);
 }
