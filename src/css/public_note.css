@@ -583,6 +583,94 @@ table th {
     line-height: 1.2;
 }
 
+.public-note-attachments-row {
+    margin-top: 0;
+    margin-bottom: 14px;
+}
+
+.public-note-attachments {
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid #d8dee4;
+}
+
+.public-note-attachments h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.public-note-attachments-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.public-note-attachment-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+    padding: 9px 12px;
+    border: 1px solid #d8dee4;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #0f172a;
+    text-decoration: none;
+    transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.public-note-attachment-link:hover,
+.public-note-attachment-link:focus {
+    border-color: #007db8;
+    background: #f7fbfd;
+    color: #005a8b;
+    text-decoration: none;
+}
+
+.public-note-attachment-link i {
+    flex: 0 0 auto;
+    color: #64748b;
+}
+
+.public-note-attachment-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.public-note-attachment-size {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+@media screen and (max-width: 520px) {
+    .public-note-attachment-link {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .public-note-attachment-name {
+        flex: 1 1 calc(100% - 28px);
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .public-note-attachment-size {
+        flex-basis: 100%;
+        margin-left: 28px;
+    }
+}
+
 /* Theme toggle button */
 .public-note-header {
     display: flex;
@@ -627,6 +715,32 @@ html[data-theme='dark'] .theme-toggle-btn {
 html[data-theme='dark'] .theme-toggle-btn:hover {
     background: #333333;
     border-color: #666;
+}
+
+html[data-theme='dark'] .public-note-attachments {
+    border-bottom-color: #404040;
+}
+
+html[data-theme='dark'] .public-note-attachments h2 {
+    color: #e5e7eb;
+}
+
+html[data-theme='dark'] .public-note-attachment-link {
+    border-color: #404040;
+    background: #1f2937;
+    color: #e5e7eb;
+}
+
+html[data-theme='dark'] .public-note-attachment-link:hover,
+html[data-theme='dark'] .public-note-attachment-link:focus {
+    border-color: #38bdf8;
+    background: #243447;
+    color: #bae6fd;
+}
+
+html[data-theme='dark'] .public-note-attachment-link i,
+html[data-theme='dark'] .public-note-attachment-size {
+    color: #9ca3af;
 }
 
 /* Dark mode styles for important tasks */

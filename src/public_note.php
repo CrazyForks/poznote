@@ -53,6 +53,47 @@ function extractTokenFromPath($path) {
     return '';
 }
 
+function publicNoteAttachmentIsImage(array $attachment) {
+    $mimeType = $attachment['file_type'] ?? $attachment['mime_type'] ?? '';
+    if (is_string($mimeType) && strpos($mimeType, 'image/') === 0) {
+        return true;
+    }
+
+    $filename = $attachment['original_filename'] ?? $attachment['filename'] ?? '';
+    $extension = strtolower(pathinfo((string)$filename, PATHINFO_EXTENSION));
+    return in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'], true);
+}
+
+function publicNoteAttachmentIsInline(array $attachment, string $content) {
+    if (empty($attachment['id']) || !publicNoteAttachmentIsImage($attachment)) {
+        return false;
+    }
+
+    $pattern = 'attachments/' . (string)$attachment['id'];
+    return strpos($content, $pattern) !== false
+        || strpos($content, rawurlencode($pattern)) !== false
+        || strpos($content, urlencode($pattern)) !== false;
+}
+
+function publicNoteBuildAttachmentUrl($noteId, $attachmentId, $scriptDir, $token, $folderToken, $isFolderShared) {
+    $pathPrefix = ($scriptDir && $scriptDir !== '/') ? $scriptDir : '';
+    $url = $pathPrefix . '/api/v1/notes/' . rawurlencode((string)$noteId) . '/attachments/' . rawurlencode((string)$attachmentId);
+    $query = [];
+
+    if (!$isFolderShared && !empty($token)) {
+        $query['token'] = $token;
+    }
+    if (!empty($folderToken)) {
+        $query['folder_token'] = $folderToken;
+    }
+
+    if (!empty($query)) {
+        $url .= '?' . http_build_query($query);
+    }
+
+    return $url;
+}
+
 $token = $_GET['token'] ?? '';
 $folderToken = $_GET['folder_token'] ?? '';
 $noteIdParam = $_GET['id'] ?? '';
@@ -408,7 +449,7 @@ try {
     // DATABASE: FETCH NOTE CONTENT
     // ============================================================================
     
-    $stmt = $con->prepare('SELECT heading, entry, created, updated, type FROM entries WHERE id = ?');
+    $stmt = $con->prepare('SELECT heading, entry, created, updated, type, attachments FROM entries WHERE id = ?');
     $stmt->execute([$note_id]);
     $note = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -463,6 +504,8 @@ if (is_readable($htmlFile)) {
 if (($note['type'] ?? 'note') === 'tasklist') {
     $content = resolveTasklistStoredContent($content, $note['entry'] ?? '');
 }
+
+$contentForAttachmentDetection = $content;
 
 // ============================================================================
 // CONTENT RENDERING BY TYPE
@@ -551,7 +594,7 @@ $content = preg_replace_callback('#(src|href)=(["\']?)(/?data/(?:users/\d+/)?att
 }, $content);
 
 // Convert API attachment URLs to absolute URLs
-$content = preg_replace_callback('#(src|href)=(["\']?)(/?api/v1/notes/\d+/attachments/[^"\'\s>]+)(["\']?)#i', function($m) use ($baseUrl, $isFolderShared, $folderToken) {
+$content = preg_replace_callback('#(src|href)=(["\']?)(/?api/v1/notes/\d+/attachments/[^"\'\s>]+)(["\']?)#i', function($m) use ($baseUrl, $isFolderShared, $folderToken, $token) {
     $attr = $m[1];
     $quote = $m[2] ?: '';
     $apiPath = $m[3];
@@ -559,15 +602,45 @@ $content = preg_replace_callback('#(src|href)=(["\']?)(/?api/v1/notes/\d+/attach
     // Ensure no duplicate slashes
     $url = rtrim($baseUrl, '/') . '/' . ltrim($apiPath, '/');
     
-    // Append folder_token for notes shared via a folder so the attachment
-    // controller can verify folder-level access without requiring login
-    if ($isFolderShared && !empty($folderToken)) {
+    $query = [];
+    if (!$isFolderShared && !empty($token)) {
+        $query['token'] = $token;
+    }
+    if (!empty($folderToken)) {
+        $query['folder_token'] = $folderToken;
+    }
+    if (!empty($query)) {
         $separator = (strpos($url, '?') !== false) ? '&' : '?';
-        $url .= $separator . 'folder_token=' . urlencode($folderToken);
+        $url .= $separator . http_build_query($query);
     }
     
     return $attr . '=' . $quote . $url . $quote;
 }, $content);
+
+$publicAttachments = [];
+$attachmentsData = !empty($note['attachments']) ? json_decode($note['attachments'], true) : [];
+
+if (is_array($attachmentsData)) {
+    foreach ($attachmentsData as $attachment) {
+        if (!is_array($attachment) || empty($attachment['id'])) {
+            continue;
+        }
+        if (publicNoteAttachmentIsInline($attachment, $contentForAttachmentDetection)) {
+            continue;
+        }
+
+        $filename = $attachment['original_filename'] ?? $attachment['filename'] ?? '';
+        if ($filename === '') {
+            continue;
+        }
+
+        $publicAttachments[] = [
+            'id' => (string)$attachment['id'],
+            'filename' => (string)$filename,
+            'url' => publicNoteBuildAttachmentUrl($note_id, $attachment['id'], $scriptDir, $token, $folderToken, $isFolderShared),
+        ];
+    }
+}
 
 // ============================================================================
 // XSS SANITIZATION
@@ -708,6 +781,7 @@ if (!empty($sharedTheme) && in_array($sharedTheme, ['dark', 'light'])) {
     <link rel="stylesheet" href="css/dark-mode/markdown.css?v=<?php echo file_exists(__DIR__ . '/css/dark-mode/markdown.css') ? filemtime(__DIR__ . '/css/dark-mode/markdown.css') : '1'; ?>">
     <link rel="stylesheet" href="css/dark-mode/kanban.css?v=<?php echo file_exists(__DIR__ . '/css/dark-mode/kanban.css') ? filemtime(__DIR__ . '/css/dark-mode/kanban.css') : '1'; ?>">
     <link rel="stylesheet" href="css/dark-mode/icons.css?v=<?php echo file_exists(__DIR__ . '/css/dark-mode/icons.css') ? filemtime(__DIR__ . '/css/dark-mode/icons.css') : '1'; ?>">
+    <link rel="stylesheet" href="css/notes/attachments-row.css?v=<?php echo filemtime(__DIR__ . '/css/notes/attachments-row.css'); ?>">
     <link rel="stylesheet" href="css/public_note.css?v=<?php echo filemtime(__DIR__ . '/css/public_note.css'); ?>">
     <link rel="stylesheet" href="css/outline.css?v=<?php echo filemtime(__DIR__ . '/css/outline.css'); ?>">
     <link rel="stylesheet" href="css/modal-alerts.css">
@@ -726,6 +800,22 @@ if (!empty($sharedTheme) && in_array($sharedTheme, ['dark', 'light'])) {
     <div class="public-note-layout">
         <div class="public-note-main" id="publicNoteMain">
             <div class="public-note">
+                <?php if (!empty($publicAttachments)): ?>
+                    <div class="note-attachments-row public-note-attachments-row">
+                        <span class="lucide lucide-paperclip icon_attachment" aria-hidden="true"></span>
+                        <span class="note-attachments-list">
+                            <?php foreach ($publicAttachments as $attachment): ?>
+                                <a
+                                    class="attachment-link"
+                                    href="<?php echo htmlspecialchars($attachment['url'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>"
+                                    target="_blank"
+                                    rel="noopener"
+                                    title="<?php echo t_h('attachments.actions.download', ['filename' => $attachment['filename']], 'Download {{filename}}', $currentLang); ?>"
+                                ><?php echo htmlspecialchars($attachment['filename'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></a>
+                            <?php endforeach; ?>
+                        </span>
+                    </div>
+                <?php endif; ?>
                 <div class="public-note-header">
                     <h1><?php echo htmlspecialchars($note['heading'] ?: 'Untitled'); ?></h1>
                     <button id="themeToggle" class="theme-toggle-btn" title="Toggle theme">
