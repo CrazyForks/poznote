@@ -741,9 +741,9 @@ function parseMarkdown(text) {
     // Protect inline code spans so their content is not consumed by math regexes
     let protectedRawCode = [];
     let rawCodeIndex = 0;
-    text = text.replace(/`([^`\n]+)`/g, function (match) {
+    text = text.replace(/(?<!\\)`([^`\n]+?)(?<!\\)`/g, function (match, code) {
         let placeholder = '\x00RAWCODE' + rawCodeIndex + '\x00';
-        protectedRawCode[rawCodeIndex] = match;
+        protectedRawCode[rawCodeIndex] = code;
         rawCodeIndex++;
         return placeholder;
     });
@@ -774,10 +774,25 @@ function parseMarkdown(text) {
         return placeholder;
     });
 
-    // Restore inline code spans (as raw backtick text so processInline renders them normally)
-    text = text.replace(/\x00RAWCODE(\d+)\x00/g, function (match, index) {
-        return protectedRawCode[parseInt(index)] || match;
-    });
+    let protectedMarkdownEscapes = [];
+    let markdownEscapeIndex = 0;
+
+    function protectMarkdownBackslashEscapes(input) {
+        return input.replace(/\\([!"#$%&'()*+,\-.\/:;<=>?@\[\\\]\\^_`{|}~])(\1*)/g, function (match, escapedChar, repeatedChars) {
+            let placeholder = '\x00MDESC' + markdownEscapeIndex + '\x00';
+            protectedMarkdownEscapes[markdownEscapeIndex] = escapeHtml(escapedChar + (repeatedChars || ''));
+            markdownEscapeIndex++;
+            return placeholder;
+        });
+    }
+
+    function restoreMarkdownBackslashEscapes(input) {
+        return input.replace(/\x00MDESC(\d+)\x00/g, function (match, index) {
+            return protectedMarkdownEscapes[parseInt(index, 10)] || match;
+        });
+    }
+
+    text = protectMarkdownBackslashEscapes(text);
 
     // Extract and protect images and links from HTML escaping
     // We'll use placeholders and restore them later
@@ -1082,9 +1097,19 @@ function parseMarkdown(text) {
             return protectedCode[parseInt(index)] || match;
         });
 
+        text = text.replace(/\x00RAWCODE(\d+)\x00/g, function (match, index) {
+            var code = protectedRawCode[parseInt(index, 10)];
+            return (typeof code !== 'undefined') ? '<code>' + escapeHtml(code) + '</code>' : match;
+        });
+
         // Restore protected elements (images, links, spans, tags, iframes, videos, and audio)
         text = text.replace(/\x00P(IMG|LNK|SPAN|TAG|IFRAME|VIDEO|AUDIO)(\d+)\x00/g, function (match, type, index) {
             return protectedElements[parseInt(index)] || match;
+        });
+
+        text = text.replace(/\x00RAWCODE(\d+)\x00/g, function (match, index) {
+            var code = protectedRawCode[parseInt(index, 10)];
+            return (typeof code !== 'undefined') ? '<code>' + escapeHtml(code) + '</code>' : match;
         });
 
         // Restore protected inline math
@@ -1657,7 +1682,7 @@ function parseMarkdown(text) {
         }
     }
 
-    return result.join('\n');
+    return restoreMarkdownBackslashEscapes(result.join('\n'));
 }
 
 /**

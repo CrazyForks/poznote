@@ -73,10 +73,26 @@
 
     function formatInline(text) {
         var tokens = [];
+        var escapedMarkdown = [];
+
         function store(html) {
             tokens.push(html);
             return TOKEN_OPEN + (tokens.length - 1) + TOKEN_CLOSE;
         }
+
+        function protectEscapedMarkdown(input) {
+            return input.replace(/\\([!"#$%&'()*+,\-.\/:;<=>?@\[\\\]\\^_`{|}~])(\1*)/g, function (match) {
+                escapedMarkdown.push(escapeHtml(match));
+                return TOKEN_OPEN + 'E' + (escapedMarkdown.length - 1) + TOKEN_CLOSE;
+            });
+        }
+
+        function restoreEscapedMarkdown(input) {
+            var escapedTokenRegex = new RegExp(TOKEN_OPEN + 'E(\\d+)' + TOKEN_CLOSE, 'g');
+            return input.replace(escapedTokenRegex, function (_, i) { return escapedMarkdown[+i] || ''; });
+        }
+
+        text = protectEscapedMarkdown(text);
 
         // Inline code first so its content is protected from other rules
         text = text.replace(/`([^`\n]+?)`/g, function (_, code) {
@@ -178,8 +194,10 @@
         do {
             prev = out;
             out = out.replace(tokenRegex, function (_, i) { return tokens[+i] || ''; });
+            out = restoreEscapedMarkdown(out);
             safety++;
         } while (out !== prev && safety < 10);
+        out = restoreEscapedMarkdown(out);
         return out;
     }
 

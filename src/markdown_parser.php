@@ -49,6 +49,26 @@ function markdownUsesPlainCodeBlockLanguage($language) {
     return $normalizedLanguage === 'normal' || $normalizedLanguage === 'code';
 }
 
+function protectMarkdownBackslashEscapes($text, &$protectedEscapes, &$escapeIndex) {
+    $escapableChars = "!\"#\$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+    $charClass = '[' . preg_quote($escapableChars, '/') . ']';
+
+    return preg_replace_callback('/\\\\(' . $charClass . ')(\1*)/', function($matches) use (&$protectedEscapes, &$escapeIndex) {
+        $literal = $matches[1] . (isset($matches[2]) ? $matches[2] : '');
+        $placeholder = "\x00MDESC" . $escapeIndex . "\x00";
+        $protectedEscapes[$escapeIndex] = htmlspecialchars($literal, ENT_QUOTES, 'UTF-8');
+        $escapeIndex++;
+        return $placeholder;
+    }, $text);
+}
+
+function restoreMarkdownBackslashEscapes($html, $protectedEscapes) {
+    return preg_replace_callback('/\x00MDESC(\d+)\x00/', function($matches) use ($protectedEscapes) {
+        $index = (int)$matches[1];
+        return isset($protectedEscapes[$index]) ? $protectedEscapes[$index] : $matches[0];
+    }, $html);
+}
+
 function parseMarkdown($text) {
     if (!$text) return '';
     
@@ -79,6 +99,15 @@ function parseMarkdown($text) {
         $codeBlockIndex++;
         return "\n" . $placeholder . "\n";
     }, $text);
+
+    $protectedInlineCode = [];
+    $inlineCodeIndex = 0;
+    $text = preg_replace_callback('/(?<!\\\\)`([^`\n]+?)(?<!\\\\)`/', function($matches) use (&$protectedInlineCode, &$inlineCodeIndex) {
+        $placeholder = "\x00RAWCODE" . $inlineCodeIndex . "\x00";
+        $protectedInlineCode[$inlineCodeIndex] = $matches[1];
+        $inlineCodeIndex++;
+        return $placeholder;
+    }, $text);
     
     // STEP 2: Extract and protect math equations (display mode: $$...$$)
     $protectedMathBlocks = [];
@@ -106,6 +135,10 @@ function parseMarkdown($text) {
         $mathInlineIndex++;
         return $placeholder;
     }, $text);
+
+    $protectedEscapes = [];
+    $escapeIndex = 0;
+    $text = protectMarkdownBackslashEscapes($text, $protectedEscapes, $escapeIndex);
     
     // STEP 4: Extract and protect images, links, and HTML elements from escaping
     $protectedElements = [];
@@ -286,7 +319,7 @@ function parseMarkdown($text) {
     
     // STEP 6: Process inline markdown styles (bold, italic, code, etc.)
     // This helper applies inline formatting after HTML escaping
-    $applyInlineStyles = function($text) use (&$protectedElements, &$protectedMathInline) {
+    $applyInlineStyles = function($text) use (&$protectedElements, &$protectedMathInline, &$protectedInlineCode) {
         // Protect inline code from other formatting
         $protectedCode = [];
         $codeIndex = 0;
@@ -346,6 +379,11 @@ function parseMarkdown($text) {
             $index = (int)$matches[1];
             return isset($protectedCode[$index]) ? $protectedCode[$index] : $matches[0];
         }, $text);
+
+        $text = preg_replace_callback('/\x00RAWCODE(\d+)\x00/', function($matches) use ($protectedInlineCode) {
+            $index = (int)$matches[1];
+            return isset($protectedInlineCode[$index]) ? '<code>' . htmlspecialchars($protectedInlineCode[$index], ENT_QUOTES, 'UTF-8') . '</code>' : $matches[0];
+        }, $text);
         
         // Restore protected inline math elements
         $text = preg_replace_callback('/\x00MATHINLINE(\d+)\x00/', function($matches) use ($protectedMathInline) {
@@ -361,6 +399,11 @@ function parseMarkdown($text) {
         $text = preg_replace_callback('/\x00P(IMG|LNK|SPAN|TAG|IFRAME|VIDEO|AUDIO)(\d+)\x00/', function($matches) use ($protectedElements) {
             $index = (int)$matches[2];
             return isset($protectedElements[$index]) ? $protectedElements[$index] : $matches[0];
+        }, $text);
+
+        $text = preg_replace_callback('/\x00RAWCODE(\d+)\x00/', function($matches) use ($protectedInlineCode) {
+            $index = (int)$matches[1];
+            return isset($protectedInlineCode[$index]) ? '<code>' . htmlspecialchars($protectedInlineCode[$index], ENT_QUOTES, 'UTF-8') . '</code>' : $matches[0];
         }, $text);
         
         return $text;
@@ -856,5 +899,5 @@ function parseMarkdown($text) {
     // Flush any remaining paragraph
     $flushParagraph();
     
-    return implode("\n", $result);
+    return restoreMarkdownBackslashEscapes(implode("\n", $result), $protectedEscapes);
 }
