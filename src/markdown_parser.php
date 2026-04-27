@@ -336,15 +336,15 @@ function parseMarkdown($text) {
         // Bold and italic (handling nesting better by avoiding [^*] which stops at the first asterisk)
         // Triple formatting (Bold + Italic)
         $text = preg_replace('/\*\*\*(.*?)\*\*\*/s', '<strong><em>$1</em></strong>', $text);
-        $text = preg_replace('/___(.*?)___/s', '<strong><em>$1</em></strong>', $text);
+        $text = preg_replace('/(^|[^A-Za-z0-9_])___(?=\S)(.*?\S)___(?![A-Za-z0-9_])/s', '$1<strong><em>$2</em></strong>', $text);
         
         // Bold
         $text = preg_replace('/\*\*(.*?)\*\*/s', '<strong>$1</strong>', $text);
-        $text = preg_replace('/__(.*?)__/s', '<strong>$1</strong>', $text);
+        $text = preg_replace('/(^|[^A-Za-z0-9_])__(?=\S)(.*?\S)__(?![A-Za-z0-9_])/s', '$1<strong>$2</strong>', $text);
         
         // Italic (use lookahead/lookbehind to ensure we don't match double asterisks)
         $text = preg_replace('/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/s', '<em>$1</em>', $text);
-        $text = preg_replace('/(?<!_)_(?!_)(.*?)(?<!_)_(?!_)/s', '<em>$1</em>', $text);
+        $text = preg_replace('/(^|[^A-Za-z0-9_])_(?=\S)(.*?\S)_(?![A-Za-z0-9_])/s', '$1<em>$2</em>', $text);
         
         // Strikethrough: ~~text~~
         $text = preg_replace('/~~(.*?)~~/s', '<del>$1</del>', $text);

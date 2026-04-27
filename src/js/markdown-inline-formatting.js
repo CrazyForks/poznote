@@ -92,6 +92,17 @@
             return input.replace(escapedTokenRegex, function (_, i) { return escapedMarkdown[+i] || ''; });
         }
 
+        function replaceUnderscoreInline(input, delimiter, className) {
+            var pattern = new RegExp('(^|[^A-Za-z0-9_])' + delimiter + '(?=\\S)([\\s\\S]*?\\S)' + delimiter + '(?![A-Za-z0-9_])', 'g');
+            return input.replace(pattern, function (_, pre, inner) {
+                return (pre || '') + store(
+                    '<span class="md-syntax">' + escapeHtml(delimiter) + '</span>' +
+                    '<span class="' + className + '">' + escapeHtml(inner) + '</span>' +
+                    '<span class="md-syntax">' + escapeHtml(delimiter) + '</span>'
+                );
+            });
+        }
+
         text = protectEscapedMarkdown(text);
 
         // Inline code first so its content is protected from other rules
@@ -126,22 +137,24 @@
         });
 
         // Bold + italic (***x*** or ___x___)
-        text = text.replace(/(\*\*\*|___)(?=\S)([\s\S]+?)(?<=\S)\1/g, function (_, m, inner) {
+        text = text.replace(/\*\*\*(?=\S)([\s\S]*?\S)\*\*\*/g, function (_, inner) {
             return store(
-                '<span class="md-syntax">' + escapeHtml(m) + '</span>' +
+                '<span class="md-syntax">***</span>' +
                 '<span class="md-bold md-italic">' + escapeHtml(inner) + '</span>' +
-                '<span class="md-syntax">' + escapeHtml(m) + '</span>'
+                '<span class="md-syntax">***</span>'
             );
         });
+        text = replaceUnderscoreInline(text, '___', 'md-bold md-italic');
 
         // Bold (**x** or __x__)
-        text = text.replace(/(\*\*|__)(?=\S)([\s\S]+?)(?<=\S)\1/g, function (_, m, inner) {
+        text = text.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, function (_, inner) {
             return store(
-                '<span class="md-syntax">' + escapeHtml(m) + '</span>' +
+                '<span class="md-syntax">**</span>' +
                 '<span class="md-bold">' + escapeHtml(inner) + '</span>' +
-                '<span class="md-syntax">' + escapeHtml(m) + '</span>'
+                '<span class="md-syntax">**</span>'
             );
         });
+        text = replaceUnderscoreInline(text, '__', 'md-bold');
 
         // Italic *x*
         try {
@@ -155,15 +168,7 @@
         } catch (e) { /* lookbehind unsupported */ }
 
         // Italic _x_
-        try {
-            text = text.replace(/(^|[^_\w])_(?=\S)([^_\n]+?)(?<=\S)_(?!\w)/g, function (m, pre, inner) {
-                return (pre || '') + store(
-                    '<span class="md-syntax">_</span>' +
-                    '<span class="md-italic">' + escapeHtml(inner) + '</span>' +
-                    '<span class="md-syntax">_</span>'
-                );
-            });
-        } catch (e) { /* lookbehind unsupported */ }
+        text = replaceUnderscoreInline(text, '_', 'md-italic');
 
         // Strikethrough
         text = text.replace(/~~([^~\n]+?)~~/g, function (_, inner) {

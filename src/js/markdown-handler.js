@@ -1074,11 +1074,11 @@ function parseMarkdown(text) {
 
         // Bold and italic
         text = text.replace(/\*\*\*([^\*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
-        text = text.replace(/___([^_]+)___/g, '<strong><em>$1</em></strong>');
+        text = text.replace(/(^|[^A-Za-z0-9_])___(?=\S)([\s\S]*?\S)___(?![A-Za-z0-9_])/g, '$1<strong><em>$2</em></strong>');
         text = text.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
-        text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+        text = text.replace(/(^|[^A-Za-z0-9_])__(?=\S)([\s\S]*?\S)__(?![A-Za-z0-9_])/g, '$1<strong>$2</strong>');
         text = text.replace(/\*([^\*]+)\*/g, '<em>$1</em>');
-        text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
+        text = text.replace(/(^|[^A-Za-z0-9_])_(?=\S)([\s\S]*?\S)_(?![A-Za-z0-9_])/g, '$1<em>$2</em>');
 
         // Strikethrough
         text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
