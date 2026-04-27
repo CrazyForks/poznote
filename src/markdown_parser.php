@@ -49,6 +49,33 @@ function markdownUsesPlainCodeBlockLanguage($language) {
     return $normalizedLanguage === 'normal' || $normalizedLanguage === 'code';
 }
 
+function protectMarkdownBackslashEscapes($text, &$protectedEscapes, &$escapeIndex) {
+    $escapableChars = "!\"#\$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+    $charClass = '[' . preg_quote($escapableChars, '/') . ']';
+
+    return preg_replace_callback('/\\\\(' . $charClass . ')(\1*)/', function($matches) use (&$protectedEscapes, &$escapeIndex) {
+        $literal = $matches[1] . (isset($matches[2]) ? $matches[2] : '');
+        $placeholder = "\x00MDESC" . $escapeIndex . "\x00";
+        $protectedEscapes[$escapeIndex] = htmlspecialchars($literal, ENT_QUOTES, 'UTF-8');
+        $escapeIndex++;
+        return $placeholder;
+    }, $text);
+}
+
+function restoreMarkdownBackslashEscapes($html, $protectedEscapes) {
+    return preg_replace_callback('/\x00MDESC(\d+)\x00/', function($matches) use ($protectedEscapes) {
+        $index = (int)$matches[1];
+        return isset($protectedEscapes[$index]) ? $protectedEscapes[$index] : $matches[0];
+    }, $html);
+}
+
+function renderMarkdownMermaidBlock($source) {
+    $mermaidSource = trim(html_entity_decode((string)$source, ENT_QUOTES, 'UTF-8'));
+    $escapedSource = htmlspecialchars($mermaidSource, ENT_QUOTES, 'UTF-8');
+    $escapedAttribute = str_replace(["\r\n", "\r", "\n"], '&#10;', $escapedSource);
+    return '<div class="mermaid" data-mermaid-source="' . $escapedAttribute . '">' . $escapedSource . '</div>';
+}
+
 function parseMarkdown($text) {
     if (!$text) return '';
     
@@ -62,8 +89,7 @@ function parseMarkdown($text) {
         $placeholder = "\x00CODEBLOCK" . $codeBlockIndex . "\x00";
         
         if (strtolower($lang) === 'mermaid') {
-            // Mermaid diagrams stay unescaped for rendering
-            $protectedCodeBlocks[$codeBlockIndex] = '<div class="mermaid">' . $code . '</div>';
+            $protectedCodeBlocks[$codeBlockIndex] = renderMarkdownMermaidBlock($code);
         } else {
             // Escape HTML in code blocks so it displays as text
             $escapedCode = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
@@ -78,6 +104,15 @@ function parseMarkdown($text) {
         }
         $codeBlockIndex++;
         return "\n" . $placeholder . "\n";
+    }, $text);
+
+    $protectedInlineCode = [];
+    $inlineCodeIndex = 0;
+    $text = preg_replace_callback('/(?<!\\\\)`([^`\n]+?)(?<!\\\\)`/', function($matches) use (&$protectedInlineCode, &$inlineCodeIndex) {
+        $placeholder = "\x00RAWCODE" . $inlineCodeIndex . "\x00";
+        $protectedInlineCode[$inlineCodeIndex] = $matches[1];
+        $inlineCodeIndex++;
+        return $placeholder;
     }, $text);
     
     // STEP 2: Extract and protect math equations (display mode: $$...$$)
@@ -106,6 +141,10 @@ function parseMarkdown($text) {
         $mathInlineIndex++;
         return $placeholder;
     }, $text);
+
+    $protectedEscapes = [];
+    $escapeIndex = 0;
+    $text = protectMarkdownBackslashEscapes($text, $protectedEscapes, $escapeIndex);
     
     // STEP 4: Extract and protect images, links, and HTML elements from escaping
     $protectedElements = [];
@@ -286,7 +325,7 @@ function parseMarkdown($text) {
     
     // STEP 6: Process inline markdown styles (bold, italic, code, etc.)
     // This helper applies inline formatting after HTML escaping
-    $applyInlineStyles = function($text) use (&$protectedElements, &$protectedMathInline) {
+    $applyInlineStyles = function($text) use (&$protectedElements, &$protectedMathInline, &$protectedInlineCode) {
         // Protect inline code from other formatting
         $protectedCode = [];
         $codeIndex = 0;
@@ -303,15 +342,15 @@ function parseMarkdown($text) {
         // Bold and italic (handling nesting better by avoiding [^*] which stops at the first asterisk)
         // Triple formatting (Bold + Italic)
         $text = preg_replace('/\*\*\*(.*?)\*\*\*/s', '<strong><em>$1</em></strong>', $text);
-        $text = preg_replace('/___(.*?)___/s', '<strong><em>$1</em></strong>', $text);
+        $text = preg_replace('/(^|[^A-Za-z0-9_])___(?=\S)(.*?\S)___(?![A-Za-z0-9_])/s', '$1<strong><em>$2</em></strong>', $text);
         
         // Bold
         $text = preg_replace('/\*\*(.*?)\*\*/s', '<strong>$1</strong>', $text);
-        $text = preg_replace('/__(.*?)__/s', '<strong>$1</strong>', $text);
+        $text = preg_replace('/(^|[^A-Za-z0-9_])__(?=\S)(.*?\S)__(?![A-Za-z0-9_])/s', '$1<strong>$2</strong>', $text);
         
         // Italic (use lookahead/lookbehind to ensure we don't match double asterisks)
         $text = preg_replace('/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/s', '<em>$1</em>', $text);
-        $text = preg_replace('/(?<!_)_(?!_)(.*?)(?<!_)_(?!_)/s', '<em>$1</em>', $text);
+        $text = preg_replace('/(^|[^A-Za-z0-9_])_(?=\S)(.*?\S)_(?![A-Za-z0-9_])/s', '$1<em>$2</em>', $text);
         
         // Strikethrough: ~~text~~
         $text = preg_replace('/~~(.*?)~~/s', '<del>$1</del>', $text);
@@ -346,6 +385,11 @@ function parseMarkdown($text) {
             $index = (int)$matches[1];
             return isset($protectedCode[$index]) ? $protectedCode[$index] : $matches[0];
         }, $text);
+
+        $text = preg_replace_callback('/\x00RAWCODE(\d+)\x00/', function($matches) use ($protectedInlineCode) {
+            $index = (int)$matches[1];
+            return isset($protectedInlineCode[$index]) ? '<code>' . htmlspecialchars($protectedInlineCode[$index], ENT_QUOTES, 'UTF-8') . '</code>' : $matches[0];
+        }, $text);
         
         // Restore protected inline math elements
         $text = preg_replace_callback('/\x00MATHINLINE(\d+)\x00/', function($matches) use ($protectedMathInline) {
@@ -361,6 +405,11 @@ function parseMarkdown($text) {
         $text = preg_replace_callback('/\x00P(IMG|LNK|SPAN|TAG|IFRAME|VIDEO|AUDIO)(\d+)\x00/', function($matches) use ($protectedElements) {
             $index = (int)$matches[2];
             return isset($protectedElements[$index]) ? $protectedElements[$index] : $matches[0];
+        }, $text);
+
+        $text = preg_replace_callback('/\x00RAWCODE(\d+)\x00/', function($matches) use ($protectedInlineCode) {
+            $index = (int)$matches[1];
+            return isset($protectedInlineCode[$index]) ? '<code>' . htmlspecialchars($protectedInlineCode[$index], ENT_QUOTES, 'UTF-8') . '</code>' : $matches[0];
         }, $text);
         
         return $text;
@@ -856,5 +905,5 @@ function parseMarkdown($text) {
     // Flush any remaining paragraph
     $flushParagraph();
     
-    return implode("\n", $result);
+    return restoreMarkdownBackslashEscapes(implode("\n", $result), $protectedEscapes);
 }

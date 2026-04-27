@@ -11,6 +11,22 @@ function _mdEscapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+function _mdEscapeHtmlAttribute(str) {
+    return _mdEscapeHtml(str).replace(/\r\n|\r|\n/g, '&#10;');
+}
+
+function _mdNormalizeMermaidSourceForRendering(source) {
+    return String(source || '')
+        .replace(/\\n/g, '<br/>')
+        .replace(/<br\s*\/?>/gi, '<br/>');
+}
+
+function _mdRenderMermaidBlock(source) {
+    var mermaidSource = String(source || '').trim();
+    var escapedSource = _mdEscapeHtml(mermaidSource);
+    return '<div class="mermaid" data-mermaid-source="' + _mdEscapeHtmlAttribute(mermaidSource) + '">' + escapedSource + '</div>';
+}
+
 // Helper function to normalize content from contentEditable
 function normalizeContentEditableText(element) {
     // More robust content extraction that handles contentEditable quirks
@@ -257,6 +273,133 @@ function renumberMarkdownOrderedListLines(lines) {
     }
 
     return renumberedLines;
+}
+
+function isMarkdownTableRowLine(line) {
+    return /^\s*\|.*\|\s*$/.test(line || '');
+}
+
+function isMarkdownTableSeparatorLine(line) {
+    return /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/.test(line || '');
+}
+
+function getMarkdownTableCells(line) {
+    if (!isMarkdownTableRowLine(line)) {
+        return null;
+    }
+
+    return String(line)
+        .trim()
+        .split('|')
+        .slice(1, -1)
+        .map(function (cell) {
+            return cell.trim();
+        });
+}
+
+function buildMarkdownEmptyTableRow(cellCount, indent) {
+    var safeCount = Math.max(1, cellCount || 0);
+    return (indent || '') + '|' + new Array(safeCount + 1).join('   |');
+}
+
+function handleMarkdownTableEnter(event, editorDiv, noteEntry, noteId) {
+    if (!event || event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || !editorDiv || !noteEntry) {
+        return false;
+    }
+
+    var selectionOffsets = getSelectionOffsetsInTextElement(editorDiv);
+    if (!selectionOffsets || selectionOffsets.start !== selectionOffsets.end) {
+        return false;
+    }
+
+    var content = normalizeContentEditableText(editorDiv);
+    if (!content) {
+        return false;
+    }
+
+    var lines = content.split('\n');
+    var lineStarts = getMarkdownLineStartOffsets(content);
+    var lineIndex = getMarkdownLineIndexForOffset(lineStarts, selectionOffsets.start);
+    var currentLine = lines[lineIndex] || '';
+    var currentLineEnd = (lineStarts[lineIndex] || 0) + currentLine.length;
+
+    if (!isMarkdownTableRowLine(currentLine)) {
+        return false;
+    }
+
+    var isCurrentLineSeparator = isMarkdownTableSeparatorLine(currentLine);
+    var separatorIndex = isCurrentLineSeparator ? lineIndex : -1;
+    for (var scanIndex = lineIndex - 1; scanIndex >= 0 && separatorIndex === -1; scanIndex--) {
+        if (isMarkdownTableSeparatorLine(lines[scanIndex] || '')) {
+            separatorIndex = scanIndex;
+            break;
+        }
+
+        if (!isMarkdownTableRowLine(lines[scanIndex])) {
+            break;
+        }
+    }
+
+    if (separatorIndex <= 0) {
+        return false;
+    }
+
+    var tableEnd = lineIndex;
+    while (tableEnd + 1 < lines.length && isMarkdownTableRowLine(lines[tableEnd + 1])) {
+        tableEnd++;
+    }
+
+    if (lineIndex < separatorIndex) {
+        return false;
+    }
+
+    var headerCells = getMarkdownTableCells(lines[separatorIndex - 1] || '');
+    var currentCells = getMarkdownTableCells(currentLine);
+    var columnCount = headerCells && headerCells.length > 0
+        ? headerCells.length
+        : (currentCells ? currentCells.length : 0);
+
+    if (columnCount === 0 || !currentCells || currentCells.length === 0) {
+        return false;
+    }
+
+    var currentIndentMatch = currentLine.match(/^([ \t]*)\|/);
+    var currentIndent = currentIndentMatch ? currentIndentMatch[1] : '';
+    var isCaretAtLineEnd = selectionOffsets.start === currentLineEnd;
+    var isLastTableRow = lineIndex === tableEnd;
+
+    if (!isMarkdownTableSeparatorLine(currentLine) && currentCells.length === columnCount) {
+        var isEmptyRow = currentCells.every(function (cell) {
+            return cell === '';
+        });
+
+        if (isEmptyRow && isLastTableRow) {
+            event.preventDefault();
+            event.stopPropagation();
+            lines[lineIndex] = '';
+            var exitedTableContent = lines.join('\n');
+            var exitCaret = getMarkdownLineStartOffsets(exitedTableContent)[lineIndex] || 0;
+            updateMarkdownEditorContent(editorDiv, noteEntry, noteId, exitedTableContent, exitCaret, exitCaret);
+            return true;
+        }
+    }
+
+    if (!isCaretAtLineEnd) {
+        return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    var insertedLine = buildMarkdownEmptyTableRow(columnCount, currentIndent);
+    lines.splice(lineIndex + 1, 0, insertedLine);
+
+    var newContent = lines.join('\n');
+    var newLineStarts = getMarkdownLineStartOffsets(newContent);
+    var caretOffset = (newLineStarts[lineIndex + 1] || newContent.length) + currentIndent.length + 2;
+
+    updateMarkdownEditorContent(editorDiv, noteEntry, noteId, newContent, caretOffset, caretOffset);
+    return true;
 }
 
 function handleMarkdownOrderedListTab(event, editorDiv, noteEntry, noteId) {
@@ -621,7 +764,7 @@ function initMermaid(retryCount) {
             n.removeAttribute('data-processed');
         } catch (eProcessed) { }
 
-        n.textContent = existingSource;
+        n.textContent = _mdNormalizeMermaidSourceForRendering(existingSource);
         nodesToRender.push(n);
     }
 
@@ -633,13 +776,14 @@ function initMermaid(retryCount) {
             var validNodes = [];
             var checks = nodesToRender.map(function (node) {
                 var src = node.getAttribute('data-mermaid-source') || '';
+                var renderSrc = _mdNormalizeMermaidSourceForRendering(src);
                 if (!src.trim()) return Promise.resolve();
-                return Promise.resolve(mermaid.parse(src))
+                return Promise.resolve(mermaid.parse(renderSrc))
                     .then(function () {
                         // Ensure the node contains only the source text when (re)rendering
                         // and that it won't be skipped due to a stale processed flag.
                         try { node.removeAttribute('data-processed'); } catch (eDp1) { }
-                        node.textContent = src;
+                        node.textContent = renderSrc;
                         validNodes.push(node);
                     })
                     .catch(function (err) {
@@ -741,9 +885,9 @@ function parseMarkdown(text) {
     // Protect inline code spans so their content is not consumed by math regexes
     let protectedRawCode = [];
     let rawCodeIndex = 0;
-    text = text.replace(/`([^`\n]+)`/g, function (match) {
+    text = text.replace(/(?<!\\)`([^`\n]+?)(?<!\\)`/g, function (match, code) {
         let placeholder = '\x00RAWCODE' + rawCodeIndex + '\x00';
-        protectedRawCode[rawCodeIndex] = match;
+        protectedRawCode[rawCodeIndex] = code;
         rawCodeIndex++;
         return placeholder;
     });
@@ -774,10 +918,25 @@ function parseMarkdown(text) {
         return placeholder;
     });
 
-    // Restore inline code spans (as raw backtick text so processInline renders them normally)
-    text = text.replace(/\x00RAWCODE(\d+)\x00/g, function (match, index) {
-        return protectedRawCode[parseInt(index)] || match;
-    });
+    let protectedMarkdownEscapes = [];
+    let markdownEscapeIndex = 0;
+
+    function protectMarkdownBackslashEscapes(input) {
+        return input.replace(/\\([!"#$%&'()*+,\-.\/:;<=>?@\[\\\]\\^_`{|}~])(\1*)/g, function (match, escapedChar, repeatedChars) {
+            let placeholder = '\x00MDESC' + markdownEscapeIndex + '\x00';
+            protectedMarkdownEscapes[markdownEscapeIndex] = escapeHtml(escapedChar + (repeatedChars || ''));
+            markdownEscapeIndex++;
+            return placeholder;
+        });
+    }
+
+    function restoreMarkdownBackslashEscapes(input) {
+        return input.replace(/\x00MDESC(\d+)\x00/g, function (match, index) {
+            return protectedMarkdownEscapes[parseInt(index, 10)] || match;
+        });
+    }
+
+    text = protectMarkdownBackslashEscapes(text);
 
     // Extract and protect images and links from HTML escaping
     // We'll use placeholders and restore them later
@@ -1059,11 +1218,11 @@ function parseMarkdown(text) {
 
         // Bold and italic
         text = text.replace(/\*\*\*([^\*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
-        text = text.replace(/___([^_]+)___/g, '<strong><em>$1</em></strong>');
+        text = text.replace(/(^|[^A-Za-z0-9_])___(?=\S)([\s\S]*?\S)___(?![A-Za-z0-9_])/g, '$1<strong><em>$2</em></strong>');
         text = text.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
-        text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+        text = text.replace(/(^|[^A-Za-z0-9_])__(?=\S)([\s\S]*?\S)__(?![A-Za-z0-9_])/g, '$1<strong>$2</strong>');
         text = text.replace(/\*([^\*]+)\*/g, '<em>$1</em>');
-        text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
+        text = text.replace(/(^|[^A-Za-z0-9_])_(?=\S)([\s\S]*?\S)_(?![A-Za-z0-9_])/g, '$1<em>$2</em>');
 
         // Strikethrough
         text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
@@ -1082,9 +1241,19 @@ function parseMarkdown(text) {
             return protectedCode[parseInt(index)] || match;
         });
 
+        text = text.replace(/\x00RAWCODE(\d+)\x00/g, function (match, index) {
+            var code = protectedRawCode[parseInt(index, 10)];
+            return (typeof code !== 'undefined') ? '<code>' + escapeHtml(code) + '</code>' : match;
+        });
+
         // Restore protected elements (images, links, spans, tags, iframes, videos, and audio)
         text = text.replace(/\x00P(IMG|LNK|SPAN|TAG|IFRAME|VIDEO|AUDIO)(\d+)\x00/g, function (match, type, index) {
             return protectedElements[parseInt(index)] || match;
+        });
+
+        text = text.replace(/\x00RAWCODE(\d+)\x00/g, function (match, index) {
+            var code = protectedRawCode[parseInt(index, 10)];
+            return (typeof code !== 'undefined') ? '<code>' + escapeHtml(code) + '</code>' : match;
         });
 
         // Restore protected inline math
@@ -1160,7 +1329,7 @@ function parseMarkdown(text) {
                         .replace(/&amp;/g, '&')
                         .replace(/&quot;/g, '"')
                         .replace(/&#039;/g, "'");
-                    result.push('<div class="mermaid">' + unescapedContent + '</div>');
+                    result.push(_mdRenderMermaidBlock(unescapedContent));
                 } else {
                     let escapedCodeContent = escapeHtml(codeContent);
                     let escapedCodeBlockLang = escapeHtml(codeBlockLang || '');
@@ -1550,7 +1719,7 @@ function parseMarkdown(text) {
         }
 
         // Tables - require a header separator row so plain pipe-delimited text stays editable as text.
-        if (line.match(/^\s*\|/) && i + 1 < lines.length && lines[i + 1].trim().match(/^\|[\s\-:|]+\|$/)) {
+        if (line.match(/^\s*\|/) && i + 1 < lines.length && isMarkdownTableSeparatorLine(lines[i + 1])) {
             flushParagraph();
 
             let tableRows = [];
@@ -1562,7 +1731,7 @@ function parseMarkdown(text) {
                 let currentLine = lines[i].trim();
 
                 // Check if this is a header separator line (|---|---|)
-                if (currentLine.match(/^\|[\s\-:|]+\|$/)) {
+                if (isMarkdownTableSeparatorLine(currentLine)) {
                     tableAlignments = currentLine
                         .split('|')
                         .slice(1, -1)
@@ -1657,7 +1826,7 @@ function parseMarkdown(text) {
         }
     }
 
-    return result.join('\n');
+    return restoreMarkdownBackslashEscapes(result.join('\n'));
 }
 
 /**
@@ -2310,6 +2479,10 @@ function setupMarkdownEditorListeners(noteId) {
             return;
         }
 
+        if (handleMarkdownTableEnter(e, editorDiv, noteEntry, noteId)) {
+            return;
+        }
+
         handleMarkdownOrderedListEnter(e, editorDiv, noteEntry, noteId);
     });
 
@@ -2648,26 +2821,11 @@ function navigateToEditorLine(lineNumber, noteEntry) {
     }
 
     try {
-        // Use the tree-walking selection helper so this works regardless of the
-        // editor's internal structure (plain text node vs. live-formatted
-        // `.md-line` spans with inter-span "\n" text nodes).
         setSelectionOffsetsInTextElement(editorDiv, charOffset, charOffset);
 
-        // Prefer scrolling the live-formatted `.md-line` span into view when
-        // available; its geometry matches the visual line. Fall back to the
-        // approximate line-height computation otherwise.
-        var lineSpans = editorDiv.querySelectorAll(':scope > .md-line');
-        if (lineSpans && lineSpans.length > lineNumber && lineSpans[lineNumber]) {
-            try {
-                lineSpans[lineNumber].scrollIntoView({ block: 'center', inline: 'nearest' });
-            } catch (e2) {
-                lineSpans[lineNumber].scrollIntoView(true);
-            }
-        } else {
-            var lineHeight = parseInt(window.getComputedStyle(editorDiv).lineHeight) || 20;
-            var scrollTop = lineNumber * lineHeight - editorDiv.clientHeight / 2;
-            editorDiv.scrollTop = Math.max(0, scrollTop);
-        }
+        var lineHeight = parseInt(window.getComputedStyle(editorDiv).lineHeight) || 20;
+        var scrollTop = lineNumber * lineHeight - editorDiv.clientHeight / 2;
+        editorDiv.scrollTop = Math.max(0, scrollTop);
     } catch (e) {
         console.warn('Could not set cursor position:', e);
     }

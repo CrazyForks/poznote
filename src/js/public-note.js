@@ -80,7 +80,8 @@
         }
     }
 
-    function setTheme(theme) {
+    function setTheme(theme, options) {
+        options = options || {};
         root.setAttribute('data-theme', theme);
         root.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
         root.style.backgroundColor = theme === 'dark' ? '#252526' : '#ffffff';
@@ -93,63 +94,18 @@
 
         updateThemeIcon(theme);
 
-        // Reinitialize mermaid with new theme if present
-        rerenderMermaidDiagrams(theme === 'dark');
+        if (options.rerenderMermaid !== false) {
+            rerenderMermaidDiagrams();
+        }
     }
 
     /**
      * Re-render all Mermaid diagrams with the specified theme
      * This properly handles Mermaid's caching by removing old IDs and re-rendering
      */
-    function rerenderMermaidDiagrams(isDark) {
+    function rerenderMermaidDiagrams() {
         if (typeof mermaid === 'undefined') return;
-
-        const mermaidNodes = document.querySelectorAll('.mermaid');
-        if (mermaidNodes.length === 0) return;
-
-        try {
-            // Re-initialize mermaid with new config
-            mermaid.initialize(getMermaidConfig(isDark));
-
-            // Collect nodes that need re-rendering
-            const nodesToRender = [];
-
-            mermaidNodes.forEach(function (node) {
-                const source = node.getAttribute('data-mermaid-source') || '';
-                if (!source.trim()) return;
-
-                // Remove the data-processed attribute to allow re-rendering
-                node.removeAttribute('data-processed');
-
-                // Remove any existing ID that Mermaid assigned (they are like mermaid-123)
-                if (node.id && node.id.startsWith('mermaid-')) {
-                    node.removeAttribute('id');
-                }
-
-                // Clear the node content and restore original source
-                node.innerHTML = '';
-                node.textContent = source;
-
-                nodesToRender.push(node);
-            });
-
-            if (nodesToRender.length > 0) {
-                // Use mermaid.run for modern versions
-                if (typeof mermaid.run === 'function') {
-                    mermaid.run({
-                        nodes: nodesToRender,
-                        suppressErrors: true
-                    }).catch(function (e) {
-                        console.error('Mermaid re-render failed', e);
-                    });
-                } else {
-                    // Fallback for older mermaid versions
-                    mermaid.init(undefined, nodesToRender);
-                }
-            }
-        } catch (e) {
-            console.error('Mermaid theme update failed', e);
-        }
+        initializeMermaid();
     }
 
     if (themeToggle) {
@@ -166,7 +122,7 @@
         if (savedTheme && (savedTheme === 'dark' || savedTheme === 'light')) {
             const serverTheme = root.getAttribute('data-theme');
             if (savedTheme !== serverTheme) {
-                setTheme(savedTheme);
+                setTheme(savedTheme, { rerenderMermaid: false });
             } else {
                 updateThemeIcon(savedTheme);
             }
@@ -209,6 +165,12 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function normalizeMermaidSourceForRendering(source) {
+        return String(source || '')
+            .replace(/\\n/g, '<br/>')
+            .replace(/<br\s*\/?>/gi, '<br/>');
     }
 
     function renderMermaidError(node, err, source) {
@@ -255,6 +217,7 @@
                 const mermaidDiv = document.createElement('div');
                 mermaidDiv.className = 'mermaid';
                 mermaidDiv.textContent = diagramText;
+                mermaidDiv.setAttribute('data-mermaid-source', diagramText.trim());
 
                 if (pre && pre.parentNode) {
                     pre.parentNode.replaceChild(mermaidDiv, pre);
@@ -271,16 +234,27 @@
                 if (!n.getAttribute('data-mermaid-source')) {
                     n.setAttribute('data-mermaid-source', (n.textContent || '').trim());
                 }
+                const source = n.getAttribute('data-mermaid-source') || '';
+                if (source.trim()) {
+                    n.removeAttribute('data-processed');
+                    if (n.id && n.id.startsWith('mermaid-')) {
+                        n.removeAttribute('id');
+                    }
+                    n.innerHTML = '';
+                    n.textContent = normalizeMermaidSourceForRendering(source);
+                }
             }
 
             if (typeof mermaid.parse === 'function' && typeof Promise !== 'undefined') {
                 const validNodes = [];
                 const checks = mermaidNodes.map(function (node) {
                     const src = node.getAttribute('data-mermaid-source') || '';
+                    const renderSrc = normalizeMermaidSourceForRendering(src);
                     if (!src.trim()) return Promise.resolve();
-                    return Promise.resolve(mermaid.parse(src))
+                    return Promise.resolve(mermaid.parse(renderSrc))
                         .then(function () {
-                            node.textContent = src;
+                            node.removeAttribute('data-processed');
+                            node.textContent = renderSrc;
                             validNodes.push(node);
                         })
                         .catch(function (err) {

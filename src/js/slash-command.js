@@ -1743,10 +1743,16 @@
                         label: t('slash_menu.link', null, 'Link'),
                         action: function () {
                             if (typeof window.showLinkModal === 'function') {
+                                // Find the editor before opening the modal.
+                                let editor = savedEditableElement;
+                                if (!editor || !editor.classList.contains('markdown-editor')) {
+                                    editor = getCurrentMarkdownEditorFromSelection();
+                                }
+
                                 // Get current selection if any
                                 const sel = window.getSelection();
                                 const hasSelection = sel && sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed;
-                                const selectedText = hasSelection ? sel.toString() : '';
+                                let selectedText = hasSelection ? sel.toString() : '';
 
                                 // Save the current range/position, with fallback to the
                                 // range saved by executeCommand (in case hideSlashMenu lost it)
@@ -1758,16 +1764,31 @@
                                     savedRange = window._slashCommandSavedRange.cloneRange();
                                 }
 
-                                // Find the editor for focus purpose later
-                                let editor = savedEditableElement;
-                                if (!editor || !editor.classList.contains('markdown-editor')) {
-                                    editor = getCurrentMarkdownEditorFromSelection();
+                                // Save editor-relative offsets too. They survive modal focus changes
+                                // more reliably than a live Range in contentEditable.
+                                let savedOffsets = null;
+                                if (editor) {
+                                    savedOffsets = getSelectionOffsetsWithin(editor);
+
+                                    if (!savedOffsets && savedRange) {
+                                        try {
+                                            const selection = window.getSelection();
+                                            selection.removeAllRanges();
+                                            selection.addRange(savedRange);
+                                            savedOffsets = getSelectionOffsetsWithin(editor);
+                                        } catch (e) { }
+                                    }
+
+                                    if (!selectedText && savedOffsets && savedOffsets.end > savedOffsets.start) {
+                                        selectedText = getMarkdownEditorText(editor).slice(savedOffsets.start, savedOffsets.end);
+                                    }
                                 }
 
                                 window.showLinkModal('https://', selectedText, function (url, linkText) {
                                     if (!url) return;
 
                                     const linkMarkdown = '[' + (linkText || url || 'link') + '](' + url + ')';
+                                    let dispatchedInput = false;
 
                                     // Focus the editor first
                                     if (editor) {
@@ -1776,7 +1797,10 @@
 
                                     // Restore selection and insert link using DOM insertion (more robust than execCommand)
                                     try {
-                                        if (savedRange) {
+                                        if (editor && savedOffsets) {
+                                            replaceMarkdownRange(editor, savedOffsets.start, savedOffsets.end, linkMarkdown);
+                                            dispatchedInput = true;
+                                        } else if (savedRange) {
                                             const selection = window.getSelection();
                                             selection.removeAllRanges();
                                             selection.addRange(savedRange);
@@ -1813,7 +1837,7 @@
                                     }
 
                                     // Trigger input event for autosave
-                                    if (editor) {
+                                    if (editor && !dispatchedInput) {
                                         try {
                                             editor.dispatchEvent(new Event('input', { bubbles: true }));
                                         } catch (e) { }

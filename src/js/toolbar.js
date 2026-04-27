@@ -633,6 +633,121 @@ function getNormalizedRangeText(range) {
   }
 }
 
+function getMarkdownEditorText(editor) {
+  if (!editor) return '';
+
+  try {
+    if (typeof window.normalizeContentEditableText === 'function') {
+      return window.normalizeContentEditableText(editor);
+    }
+  } catch (e) {
+    // Fall through to plain text extraction.
+  }
+
+  return editor.innerText || editor.textContent || '';
+}
+
+function getMarkdownEditorFromRange(range) {
+  var editor = getEditorFromRange(range);
+  if (!editor) return null;
+
+  if (editor.classList && editor.classList.contains('markdown-editor')) {
+    return editor;
+  }
+
+  return editor.querySelector ? editor.querySelector('.markdown-editor') : null;
+}
+
+function getRangeOffsetsWithinEditor(editor, range) {
+  if (!editor || !range) return null;
+
+  try {
+    if (!editor.contains(range.startContainer) || !editor.contains(range.endContainer)) {
+      return null;
+    }
+
+    var startRange = range.cloneRange();
+    startRange.selectNodeContents(editor);
+    startRange.setEnd(range.startContainer, range.startOffset);
+    var start = startRange.toString().length;
+
+    var endRange = range.cloneRange();
+    endRange.selectNodeContents(editor);
+    endRange.setEnd(range.endContainer, range.endOffset);
+    var end = endRange.toString().length;
+
+    return {
+      start: Math.min(start, end),
+      end: Math.max(start, end)
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function findTextNodeAtOffset(rootEl, offset) {
+  var walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, null);
+  var node = walker.nextNode();
+  var remaining = offset;
+
+  while (node) {
+    var length = node.nodeValue ? node.nodeValue.length : 0;
+    if (remaining <= length) {
+      return { node: node, offset: remaining };
+    }
+
+    remaining -= length;
+    node = walker.nextNode();
+  }
+
+  return {
+    node: rootEl,
+    offset: rootEl.childNodes ? rootEl.childNodes.length : 0
+  };
+}
+
+function setSelectionByEditorOffsets(editor, startOffset, endOffset) {
+  if (!editor) return;
+
+  var selection = window.getSelection();
+  if (!selection) return;
+
+  var startPos = findTextNodeAtOffset(editor, Math.max(0, startOffset));
+  var endPos = findTextNodeAtOffset(editor, Math.max(0, endOffset));
+  var range = document.createRange();
+
+  try {
+    range.setStart(startPos.node, startPos.offset);
+    range.setEnd(endPos.node, endPos.offset);
+  } catch (e) {
+    range.selectNodeContents(editor);
+    range.collapse(false);
+  }
+
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function replaceMarkdownRangeByOffsets(editor, start, end, replacement) {
+  if (!editor) return false;
+
+  var fullText = getMarkdownEditorText(editor);
+  var safeStart = Math.max(0, Math.min(start, fullText.length));
+  var safeEnd = Math.max(safeStart, Math.min(end, fullText.length));
+  var newText = fullText.slice(0, safeStart) + replacement + fullText.slice(safeEnd);
+
+  editor.textContent = newText;
+  setSelectionByEditorOffsets(editor, safeStart + replacement.length, safeStart + replacement.length);
+
+  try {
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+  } catch (e) {
+    // Ignore input dispatch failures.
+  }
+
+  return true;
+}
+
 function toggleInlineCode() {
   // Check if we're in markdown mode
   if (typeof isInMarkdownEditor === 'function' && isInMarkdownEditor()) {
@@ -1123,11 +1238,19 @@ function addLinkToNote() {
     const inMarkdown = typeof isInMarkdownEditor === 'function' && isInMarkdownEditor();
 
     const sel = window.getSelection();
-    const hasSelection = sel && sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed;
-    const selectedText = hasSelection ? sel.toString() : '';
+    const currentRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+    const toolbarSavedRange = !currentRange && savedMobileToolbarRange ? savedMobileToolbarRange.cloneRange() : null;
+    const activeRange = currentRange || toolbarSavedRange;
+    const hasSelection = activeRange && !activeRange.collapsed;
+    let selectedText = hasSelection ? getNormalizedRangeText(activeRange) : '';
 
     // For markdown, handle differently
     if (inMarkdown) {
+      const markdownEditor = getMarkdownEditorFromRange(activeRange);
+      const markdownOffsets = markdownEditor && activeRange
+        ? getRangeOffsetsWithinEditor(markdownEditor, activeRange)
+        : null;
+
       // Check if selection looks like a markdown link
       const linkPattern = /\[([^\]]+)\]\(([^)]+)\)/;
       const match = selectedText.match(linkPattern);
@@ -1140,21 +1263,15 @@ function addLinkToNote() {
         existingUrl = match[2];
       }
 
-      // Focus the editor first
-      const noteentryLink = document.querySelector('.noteentry');
-      if (noteentryLink) {
-        try { noteentryLink.focus({ preventScroll: true }); } catch (e) { noteentryLink.focus(); }
-      }
-
       // Save range for markdown mode too
-      if (sel && sel.rangeCount > 0) {
-        window.savedRanges.link = sel.getRangeAt(0).cloneRange();
-      }
+      window.savedRanges.link = activeRange ? activeRange.cloneRange() : null;
 
       showLinkModal(existingUrl, existingText, function (url, text) {
         if (url === null) {
           // Remove link - replace with just text
-          if (window.savedRanges.link) {
+          if (markdownEditor && markdownOffsets) {
+            replaceMarkdownRangeByOffsets(markdownEditor, markdownOffsets.start, markdownOffsets.end, existingText);
+          } else if (window.savedRanges.link) {
             const sel = window.getSelection();
             sel.removeAllRanges();
             sel.addRange(window.savedRanges.link);
@@ -1164,10 +1281,21 @@ function addLinkToNote() {
           return;
         }
 
-        if (!url) return;
+        if (!url) {
+          window.savedRanges.link = null;
+          return;
+        }
+
+        if (markdownEditor) {
+          try { markdownEditor.focus({ preventScroll: true }); } catch (e) { markdownEditor.focus(); }
+        }
+
+        const linkMarkdown = '[' + (text || url || existingText || 'link') + '](' + url + ')';
 
         // Apply markdown link syntax
-        if (typeof applyMarkdownLink === 'function') {
+        if (markdownEditor && markdownOffsets) {
+          replaceMarkdownRangeByOffsets(markdownEditor, markdownOffsets.start, markdownOffsets.end, linkMarkdown);
+        } else if (typeof applyMarkdownLink === 'function') {
           applyMarkdownLink(url, text);
         }
 
@@ -1181,8 +1309,8 @@ function addLinkToNote() {
     let existingLink = null;
     let existingUrl = 'https://';
 
-    if (hasSelection) {
-      const range = sel.getRangeAt(0);
+    if (hasSelection && activeRange) {
+      const range = activeRange;
       const container = range.commonAncestorContainer;
 
       // Check if the selection is inside a link element
