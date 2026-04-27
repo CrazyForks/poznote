@@ -38,6 +38,30 @@ class AttachmentsController {
             }
         }
     }
+
+    private function getSafeInlineTextContentType(array $attachment): ?string {
+        $filename = $attachment['original_filename'] ?? $attachment['filename'] ?? '';
+        $extension = strtolower(pathinfo((string)$filename, PATHINFO_EXTENSION));
+
+        $inlineTypes = [
+            'txt' => 'text/plain; charset=utf-8',
+            'json' => 'application/json; charset=utf-8',
+            'csv' => 'text/csv; charset=utf-8',
+            'xml' => 'application/xml; charset=utf-8',
+            'md' => 'text/plain; charset=utf-8',
+            'markdown' => 'text/plain; charset=utf-8',
+            'log' => 'text/plain; charset=utf-8',
+            'ini' => 'text/plain; charset=utf-8',
+            'cfg' => 'text/plain; charset=utf-8',
+            'conf' => 'text/plain; charset=utf-8',
+            'toml' => 'text/plain; charset=utf-8',
+            'sql' => 'text/plain; charset=utf-8',
+            'yml' => 'text/plain; charset=utf-8',
+            'yaml' => 'text/plain; charset=utf-8',
+        ];
+
+        return $inlineTypes[$extension] ?? null;
+    }
     
     /**
      * GET /api/v1/notes/{noteId}/attachments
@@ -317,8 +341,13 @@ class AttachmentsController {
                             // Sanitize filename for Content-Disposition header
                             $safeFilename = str_replace(['"', "\r", "\n"], '', $attachment['original_filename']);
                             
-                            // For PDFs, images, videos, and audio, allow inline viewing
-                            if (strpos($file_type, 'application/pdf') !== false || 
+                            $inlineTextContentType = $this->getSafeInlineTextContentType($attachment);
+
+                            // Allow a small whitelist of passive text formats to be viewed directly.
+                            if ($inlineTextContentType !== null) {
+                                header('Content-Type: ' . $inlineTextContentType);
+                                header('Content-Disposition: inline; filename="' . $safeFilename . '"');
+                            } elseif (strpos($file_type, 'application/pdf') !== false || 
                                 strpos($file_type, 'image/') !== false || 
                                 strpos($file_type, 'video/') !== false ||
                                 strpos($file_type, 'audio/') !== false) {
