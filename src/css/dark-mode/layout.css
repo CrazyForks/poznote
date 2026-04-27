@@ -79,6 +79,12 @@ body.dark-mode .searchbar-input {
     border-color: var(--dm-border);
 }
 
+html[data-theme='dark'] #search-bar-container.contains_forms_search,
+body.dark-mode #search-bar-container.contains_forms_search {
+    background-color: var(--dm-bg);
+    border-bottom-color: var(--dm-border);
+}
+
 html[data-theme='dark'] .searchbar-input::placeholder,
 body.dark-mode .searchbar-input::placeholder {
     color: #808080;
