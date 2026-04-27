@@ -44,7 +44,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function filterTags() {
     const input = document.getElementById('tagsSearchInput');
-    const filter = input.value.toUpperCase();
+    const searchTerm = input.value;
+    const filter = searchTerm.toUpperCase();
     const tagsList = document.getElementById('tagsList');
     const tagItems = tagsList.getElementsByClassName('tag-item');
     
@@ -64,18 +65,22 @@ function filterTags() {
     }
     
     // Update results counter
-    updateSearchResults(visibleCount, filter);
+    updateSearchResults(visibleCount, searchTerm);
 }
 
 function updateSearchResults(count, searchTerm) {
     let resultsDiv = document.getElementById('searchResults');
     if (!resultsDiv) {
+        const searchWrapper = document.querySelector('.home-search-wrapper');
+        if (!searchWrapper) {
+            return;
+        }
+
         resultsDiv = document.createElement('div');
         resultsDiv.id = 'searchResults';
         resultsDiv.className = 'search-results';
-        
-        const searchContainer = document.querySelector('.tags-search-form');
-        searchContainer.appendChild(resultsDiv);
+
+        searchWrapper.appendChild(resultsDiv);
     }
     
     if (searchTerm.trim() === '') {

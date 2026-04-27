@@ -81,6 +81,10 @@ html.tags-page {
     margin: 20px;
 }
 
+.tags-page .home-search-container {
+    display: flex;
+}
+
 /* Adjust padding for search input without icon */
 .tags-search-no-icon {
     padding-left: 12px !important;
