@@ -275,6 +275,133 @@ function renumberMarkdownOrderedListLines(lines) {
     return renumberedLines;
 }
 
+function isMarkdownTableRowLine(line) {
+    return /^\s*\|.*\|\s*$/.test(line || '');
+}
+
+function isMarkdownTableSeparatorLine(line) {
+    return /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/.test(line || '');
+}
+
+function getMarkdownTableCells(line) {
+    if (!isMarkdownTableRowLine(line)) {
+        return null;
+    }
+
+    return String(line)
+        .trim()
+        .split('|')
+        .slice(1, -1)
+        .map(function (cell) {
+            return cell.trim();
+        });
+}
+
+function buildMarkdownEmptyTableRow(cellCount, indent) {
+    var safeCount = Math.max(1, cellCount || 0);
+    return (indent || '') + '|' + new Array(safeCount + 1).join('   |');
+}
+
+function handleMarkdownTableEnter(event, editorDiv, noteEntry, noteId) {
+    if (!event || event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || !editorDiv || !noteEntry) {
+        return false;
+    }
+
+    var selectionOffsets = getSelectionOffsetsInTextElement(editorDiv);
+    if (!selectionOffsets || selectionOffsets.start !== selectionOffsets.end) {
+        return false;
+    }
+
+    var content = normalizeContentEditableText(editorDiv);
+    if (!content) {
+        return false;
+    }
+
+    var lines = content.split('\n');
+    var lineStarts = getMarkdownLineStartOffsets(content);
+    var lineIndex = getMarkdownLineIndexForOffset(lineStarts, selectionOffsets.start);
+    var currentLine = lines[lineIndex] || '';
+    var currentLineEnd = (lineStarts[lineIndex] || 0) + currentLine.length;
+
+    if (!isMarkdownTableRowLine(currentLine)) {
+        return false;
+    }
+
+    var isCurrentLineSeparator = isMarkdownTableSeparatorLine(currentLine);
+    var separatorIndex = isCurrentLineSeparator ? lineIndex : -1;
+    for (var scanIndex = lineIndex - 1; scanIndex >= 0 && separatorIndex === -1; scanIndex--) {
+        if (isMarkdownTableSeparatorLine(lines[scanIndex] || '')) {
+            separatorIndex = scanIndex;
+            break;
+        }
+
+        if (!isMarkdownTableRowLine(lines[scanIndex])) {
+            break;
+        }
+    }
+
+    if (separatorIndex <= 0) {
+        return false;
+    }
+
+    var tableEnd = lineIndex;
+    while (tableEnd + 1 < lines.length && isMarkdownTableRowLine(lines[tableEnd + 1])) {
+        tableEnd++;
+    }
+
+    if (lineIndex < separatorIndex) {
+        return false;
+    }
+
+    var headerCells = getMarkdownTableCells(lines[separatorIndex - 1] || '');
+    var currentCells = getMarkdownTableCells(currentLine);
+    var columnCount = headerCells && headerCells.length > 0
+        ? headerCells.length
+        : (currentCells ? currentCells.length : 0);
+
+    if (columnCount === 0 || !currentCells || currentCells.length === 0) {
+        return false;
+    }
+
+    var currentIndentMatch = currentLine.match(/^([ \t]*)\|/);
+    var currentIndent = currentIndentMatch ? currentIndentMatch[1] : '';
+    var isCaretAtLineEnd = selectionOffsets.start === currentLineEnd;
+    var isLastTableRow = lineIndex === tableEnd;
+
+    if (!isMarkdownTableSeparatorLine(currentLine) && currentCells.length === columnCount) {
+        var isEmptyRow = currentCells.every(function (cell) {
+            return cell === '';
+        });
+
+        if (isEmptyRow && isLastTableRow) {
+            event.preventDefault();
+            event.stopPropagation();
+            lines[lineIndex] = '';
+            var exitedTableContent = lines.join('\n');
+            var exitCaret = getMarkdownLineStartOffsets(exitedTableContent)[lineIndex] || 0;
+            updateMarkdownEditorContent(editorDiv, noteEntry, noteId, exitedTableContent, exitCaret, exitCaret);
+            return true;
+        }
+    }
+
+    if (!isCaretAtLineEnd) {
+        return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    var insertedLine = buildMarkdownEmptyTableRow(columnCount, currentIndent);
+    lines.splice(lineIndex + 1, 0, insertedLine);
+
+    var newContent = lines.join('\n');
+    var newLineStarts = getMarkdownLineStartOffsets(newContent);
+    var caretOffset = (newLineStarts[lineIndex + 1] || newContent.length) + currentIndent.length + 2;
+
+    updateMarkdownEditorContent(editorDiv, noteEntry, noteId, newContent, caretOffset, caretOffset);
+    return true;
+}
+
 function handleMarkdownOrderedListTab(event, editorDiv, noteEntry, noteId) {
     if (!event || event.key !== 'Tab' || !editorDiv || !noteEntry) {
         return false;
@@ -1592,7 +1719,7 @@ function parseMarkdown(text) {
         }
 
         // Tables - require a header separator row so plain pipe-delimited text stays editable as text.
-        if (line.match(/^\s*\|/) && i + 1 < lines.length && lines[i + 1].trim().match(/^\|[\s\-:|]+\|$/)) {
+        if (line.match(/^\s*\|/) && i + 1 < lines.length && isMarkdownTableSeparatorLine(lines[i + 1])) {
             flushParagraph();
 
             let tableRows = [];
@@ -1604,7 +1731,7 @@ function parseMarkdown(text) {
                 let currentLine = lines[i].trim();
 
                 // Check if this is a header separator line (|---|---|)
-                if (currentLine.match(/^\|[\s\-:|]+\|$/)) {
+                if (isMarkdownTableSeparatorLine(currentLine)) {
                     tableAlignments = currentLine
                         .split('|')
                         .slice(1, -1)
@@ -2349,6 +2476,10 @@ function setupMarkdownEditorListeners(noteId) {
         }
 
         if (handleMarkdownOrderedListTab(e, editorDiv, noteEntry, noteId)) {
+            return;
+        }
+
+        if (handleMarkdownTableEnter(e, editorDiv, noteEntry, noteId)) {
             return;
         }
 
