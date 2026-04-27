@@ -11,6 +11,22 @@ function _mdEscapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+function _mdEscapeHtmlAttribute(str) {
+    return _mdEscapeHtml(str).replace(/\r\n|\r|\n/g, '&#10;');
+}
+
+function _mdNormalizeMermaidSourceForRendering(source) {
+    return String(source || '')
+        .replace(/\\n/g, '<br/>')
+        .replace(/<br\s*\/?>/gi, '<br/>');
+}
+
+function _mdRenderMermaidBlock(source) {
+    var mermaidSource = String(source || '').trim();
+    var escapedSource = _mdEscapeHtml(mermaidSource);
+    return '<div class="mermaid" data-mermaid-source="' + _mdEscapeHtmlAttribute(mermaidSource) + '">' + escapedSource + '</div>';
+}
+
 // Helper function to normalize content from contentEditable
 function normalizeContentEditableText(element) {
     // More robust content extraction that handles contentEditable quirks
@@ -621,7 +637,7 @@ function initMermaid(retryCount) {
             n.removeAttribute('data-processed');
         } catch (eProcessed) { }
 
-        n.textContent = existingSource;
+        n.textContent = _mdNormalizeMermaidSourceForRendering(existingSource);
         nodesToRender.push(n);
     }
 
@@ -633,13 +649,14 @@ function initMermaid(retryCount) {
             var validNodes = [];
             var checks = nodesToRender.map(function (node) {
                 var src = node.getAttribute('data-mermaid-source') || '';
+                var renderSrc = _mdNormalizeMermaidSourceForRendering(src);
                 if (!src.trim()) return Promise.resolve();
-                return Promise.resolve(mermaid.parse(src))
+                return Promise.resolve(mermaid.parse(renderSrc))
                     .then(function () {
                         // Ensure the node contains only the source text when (re)rendering
                         // and that it won't be skipped due to a stale processed flag.
                         try { node.removeAttribute('data-processed'); } catch (eDp1) { }
-                        node.textContent = src;
+                        node.textContent = renderSrc;
                         validNodes.push(node);
                     })
                     .catch(function (err) {
@@ -1185,7 +1202,7 @@ function parseMarkdown(text) {
                         .replace(/&amp;/g, '&')
                         .replace(/&quot;/g, '"')
                         .replace(/&#039;/g, "'");
-                    result.push('<div class="mermaid">' + unescapedContent + '</div>');
+                    result.push(_mdRenderMermaidBlock(unescapedContent));
                 } else {
                     let escapedCodeContent = escapeHtml(codeContent);
                     let escapedCodeBlockLang = escapeHtml(codeBlockLang || '');

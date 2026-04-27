@@ -69,6 +69,13 @@ function restoreMarkdownBackslashEscapes($html, $protectedEscapes) {
     }, $html);
 }
 
+function renderMarkdownMermaidBlock($source) {
+    $mermaidSource = trim(html_entity_decode((string)$source, ENT_QUOTES, 'UTF-8'));
+    $escapedSource = htmlspecialchars($mermaidSource, ENT_QUOTES, 'UTF-8');
+    $escapedAttribute = str_replace(["\r\n", "\r", "\n"], '&#10;', $escapedSource);
+    return '<div class="mermaid" data-mermaid-source="' . $escapedAttribute . '">' . $escapedSource . '</div>';
+}
+
 function parseMarkdown($text) {
     if (!$text) return '';
     
@@ -82,8 +89,7 @@ function parseMarkdown($text) {
         $placeholder = "\x00CODEBLOCK" . $codeBlockIndex . "\x00";
         
         if (strtolower($lang) === 'mermaid') {
-            // Mermaid diagrams stay unescaped for rendering
-            $protectedCodeBlocks[$codeBlockIndex] = '<div class="mermaid">' . $code . '</div>';
+            $protectedCodeBlocks[$codeBlockIndex] = renderMarkdownMermaidBlock($code);
         } else {
             // Escape HTML in code blocks so it displays as text
             $escapedCode = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
