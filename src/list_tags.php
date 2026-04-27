@@ -47,6 +47,7 @@ $count_tags = count($tags_list);
 sort($tags_list, SORT_NATURAL | SORT_FLAG_CASE);
 
 $currentLang = getUserLanguage();
+$cache_v = getAppVersion();
 ?>
 <!DOCTYPE html>
 <html lang="<?php echo htmlspecialchars($currentLang, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>" class="tags-page">
@@ -55,35 +56,35 @@ $currentLang = getUserLanguage();
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title><?php echo getPageTitle(); ?></title>
 	<meta name="color-scheme" content="dark light">
-	<script src="js/theme-init.js"></script>
-	<link type="text/css" rel="stylesheet" href="css/lucide.css"/>
-	<link type="text/css" rel="stylesheet" href="css/home/base.css"/>
-	<link type="text/css" rel="stylesheet" href="css/home/search.css"/>
-	<link type="text/css" rel="stylesheet" href="css/home/alerts.css"/>
-	<link type="text/css" rel="stylesheet" href="css/home/cards.css"/>
-	<link type="text/css" rel="stylesheet" href="css/home/buttons.css"/>
-	<link type="text/css" rel="stylesheet" href="css/lucide.css"/>
-	<link type="text/css" rel="stylesheet" href="css/home/dark-mode.css"/>
-	<link type="text/css" rel="stylesheet" href="css/home/responsive.css"/>
-	<link type="text/css" rel="stylesheet" href="css/list_tags.css"/>
-	<link type="text/css" rel="stylesheet" href="css/modals/base.css"/>
-	<link type="text/css" rel="stylesheet" href="css/modals/specific-modals.css"/>
-	<link type="text/css" rel="stylesheet" href="css/modals/attachments.css"/>
-	<link type="text/css" rel="stylesheet" href="css/modals/link-modal.css"/>
-	<link type="text/css" rel="stylesheet" href="css/modals/share-modal.css"/>
-	<link type="text/css" rel="stylesheet" href="css/modals/alerts-utilities.css"/>
-	<link type="text/css" rel="stylesheet" href="css/modals/responsive.css"/>
-	<link type="text/css" rel="stylesheet" href="css/dark-mode/variables.css"/>
-	<link type="text/css" rel="stylesheet" href="css/dark-mode/layout.css"/>
-	<link type="text/css" rel="stylesheet" href="css/dark-mode/menus.css"/>
-	<link type="text/css" rel="stylesheet" href="css/dark-mode/editor.css"/>
-	<link type="text/css" rel="stylesheet" href="css/dark-mode/modals.css"/>
-	<link type="text/css" rel="stylesheet" href="css/dark-mode/components.css"/>
-	<link type="text/css" rel="stylesheet" href="css/dark-mode/pages.css"/>
-	<link type="text/css" rel="stylesheet" href="css/dark-mode/markdown.css"/>
-	<link type="text/css" rel="stylesheet" href="css/dark-mode/kanban.css"/>
-	<link type="text/css" rel="stylesheet" href="css/dark-mode/icons.css"/>
-	<script src="js/theme-manager.js"></script>
+	<script src="js/theme-init.js?v=<?php echo $cache_v; ?>"></script>
+	<link type="text/css" rel="stylesheet" href="css/lucide.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/home/base.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/home/search.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/home/alerts.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/home/cards.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/home/buttons.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/lucide.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/home/dark-mode.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/home/responsive.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/list_tags.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/modals/base.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/modals/specific-modals.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/modals/attachments.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/modals/link-modal.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/modals/share-modal.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/modals/alerts-utilities.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/modals/responsive.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/dark-mode/variables.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/dark-mode/layout.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/dark-mode/menus.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/dark-mode/editor.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/dark-mode/modals.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/dark-mode/components.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/dark-mode/pages.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/dark-mode/markdown.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/dark-mode/kanban.css?v=<?php echo $cache_v; ?>"/>
+	<link type="text/css" rel="stylesheet" href="css/dark-mode/icons.css?v=<?php echo $cache_v; ?>"/>
+	<script src="js/theme-manager.js?v=<?php echo $cache_v; ?>"></script>
 </head>
 <body class="tags-page" data-workspace="<?php echo htmlspecialchars($workspace, ENT_QUOTES, 'UTF-8'); ?>">
 	<div class="tags-container">
@@ -140,9 +141,9 @@ $currentLang = getUserLanguage();
 		</div>
 	</div>
 	
-	<script src="js/globals.js?v=<?php echo getAppVersion(); ?>"></script>
-	<script src="js/navigation.js"></script>
-	<script src="js/list_tags.js"></script>
-	<script src="js/clickable-tags.js"></script>
+	<script src="js/globals.js?v=<?php echo $cache_v; ?>"></script>
+	<script src="js/navigation.js?v=<?php echo $cache_v; ?>"></script>
+	<script src="js/list_tags.js?v=<?php echo $cache_v; ?>"></script>
+	<script src="js/clickable-tags.js?v=<?php echo $cache_v; ?>"></script>
 </body>
 </html>
