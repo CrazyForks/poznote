@@ -1,9 +1,7 @@
 
 <p align="center">
-  <img src="images/poznote.svg" alt="Poznote Logo" width="80">
+  <img src="images/poznote-logo-text.png" alt="Poznote Logo" width="400">
 </p>
-
-<h1 align="center">Poznote</h1>
 
 <div align="center">
 
