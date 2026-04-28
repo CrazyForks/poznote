@@ -27,6 +27,14 @@
         return '/api/v1/notes/' + noteId + '/snapshots';
     }
 
+    function getAvailableSnapshots(snapshots) {
+        if (!Array.isArray(snapshots)) return [];
+
+        return snapshots.filter(function (snap) {
+            return snap && snap.date && snap.exists !== false && snap.available !== false && snap.has_snapshot !== false;
+        });
+    }
+
     function rememberPendingSnapshotCreate(noteId, promise) {
         var key = String(noteId);
         pendingSnapshotCreates[key] = promise;
@@ -114,7 +122,9 @@
         .then(function (data) {
             if (loadingEl) loadingEl.style.display = 'none';
 
-            if (!data.success || !data.snapshots || data.snapshots.length === 0) {
+            var snapshots = getAvailableSnapshots(data.snapshots);
+
+            if (!data.success || snapshots.length === 0) {
                 if (noSnapshotEl) noSnapshotEl.style.display = 'flex';
                 if (dateListEl) dateListEl.style.display = 'none';
                 return;
@@ -122,10 +132,10 @@
 
             // Render date list
             if (dateListEl) dateListEl.style.display = 'flex';
-            renderSnapshotDates(data.snapshots, noteId);
+            renderSnapshotDates(snapshots, noteId);
 
             // Load the most recent snapshot
-            loadSnapshotForDate(noteId, data.snapshots[0].date);
+            loadSnapshotForDate(noteId, snapshots[0].date);
         })
         .catch(function () {
             if (loadingEl) loadingEl.style.display = 'none';
