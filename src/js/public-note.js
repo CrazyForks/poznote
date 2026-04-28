@@ -18,6 +18,9 @@
             return {
                 startOnLoad: false,
                 theme: 'base',
+                flowchart: {
+                    htmlLabels: false
+                },
                 themeVariables: {
                     // Dark mode optimized colors
                     primaryColor: '#3b82f6',
@@ -63,7 +66,10 @@
         } else {
             return {
                 startOnLoad: false,
-                theme: 'default'
+                theme: 'default',
+                flowchart: {
+                    htmlLabels: false
+                }
             };
         }
     }
