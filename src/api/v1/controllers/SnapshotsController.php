@@ -165,6 +165,17 @@ class SnapshotsController {
         }
         
         try {
+            $stmt = $this->con->prepare("SELECT id, type FROM entries WHERE id = ? AND trash = 0");
+            $stmt->execute([$noteId]);
+            $note = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$note) {
+                $this->sendError(404, t('snapshot.api.note_not_found', [], 'Note not found'));
+                return;
+            }
+
+            $noteType = $note['type'] ?? 'note';
+            $expectedExtension = ($noteType === 'markdown') ? 'md' : 'html';
             $snapshotsDir = $this->getSnapshotsPath();
             $noteSnapshotDir = $snapshotsDir . '/' . $noteId;
             
@@ -179,6 +190,15 @@ class SnapshotsController {
                     foreach ($files as $file) {
                         // Match content files only (not .meta.json)
                         if (preg_match('/^(\d{4}-\d{2}-\d{2})\.(html|md)$/', $file, $m)) {
+                            if ($m[2] !== $expectedExtension) {
+                                continue;
+                            }
+
+                            $snapshotFile = $noteSnapshotDir . '/' . $file;
+                            if (!is_file($snapshotFile) || !is_readable($snapshotFile)) {
+                                continue;
+                            }
+
                             $date = $m[1];
                             $metaFile = $noteSnapshotDir . '/' . $date . '.meta.json';
                             $meta = [];

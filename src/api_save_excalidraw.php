@@ -287,35 +287,44 @@ function saveEmbeddedDiagram() {
     }
     
     try {
-        // Load the existing note HTML (Excalidraw always uses .html files)
+        // Load the existing note content using the note's native storage file.
         require_once 'functions.php';
-        $html_file = getEntriesPath() . '/' . $note_id . '.html';
+        $stmt = $con->prepare("SELECT entry, type FROM entries WHERE id = ?");
+        $stmt->execute([$note_id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Note not found']);
+            return;
+        }
+
+        $note_type = !empty($row['type']) ? $row['type'] : 'note';
+        $content_file = getEntryFilename($note_id, $note_type);
+        $read_file = $content_file;
+        $legacy_html_file = getEntriesPath() . '/' . $note_id . '.html';
+        if (!file_exists($read_file) && file_exists($legacy_html_file)) {
+            $read_file = $legacy_html_file;
+        }
         
-        if (!file_exists($html_file)) {
-            // HTML file doesn't exist, try to get content from database
-            $stmt = $con->prepare("SELECT entry FROM entries WHERE id = ?");
-            $stmt->execute([$note_id]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            if (!$row) {
-                http_response_code(404);
-                echo json_encode(['success' => false, 'message' => 'Note not found']);
-                return;
-            }
-            
+        if (!file_exists($read_file)) {
+            // Content file doesn't exist, try to get content from database.
             $html_content = $row['entry'] ?? '';
             
-            // Create the HTML file with the database content
-            $entriesDir = dirname($html_file);
+            // Create the native note file with the database content.
+            $entriesDir = dirname($content_file);
             if (!is_dir($entriesDir)) {
                 mkdir($entriesDir, 0755, true);
             }
             
             if (!empty($html_content)) {
-                file_put_contents($html_file, $html_content);
+                file_put_contents($content_file, $html_content);
             }
         } else {
-            $html_content = file_get_contents($html_file);
+            $html_content = file_get_contents($read_file);
+            if ($html_content === false) {
+                $html_content = $row['entry'] ?? '';
+            }
         }
         
         // Save preview image as attachment if provided
@@ -451,6 +460,9 @@ function saveEmbeddedDiagram() {
         
         $diagram_html_core .= '</div>';
         
+        $is_markdown_note = ($note_type === 'markdown');
+        $diagram_html_replacement = $is_markdown_note ? "\n\n" . $diagram_html_core . "\n\n" : $diagram_html_core;
+
         // Find and replace the existing diagram container or button placeholder
         // Flexible patterns to match both attribute orders (class before id, or id before class)
         $pattern_with_placeholders = '/(<p class="excalidraw-placeholder"[^>]*><\/p>)?\s*<div[^>]*class="excalidraw-container"[^>]*id="' . preg_quote($diagram_id, '/') . '"[^>]*>.*?<\/div>\s*(<p class="excalidraw-placeholder"[^>]*><\/p>)?/s';
@@ -462,65 +474,87 @@ function saveEmbeddedDiagram() {
             $match_start = $matches[0][1];
             $match_end = $match_start + strlen($matches[0][0]);
             
-            $html_content = substr($html_content, 0, $match_start) . $diagram_html_core . substr($html_content, $match_end);
+            $html_content = substr($html_content, 0, $match_start) . $diagram_html_replacement . substr($html_content, $match_end);
         } else if (preg_match($pattern_with_placeholders_alt, $html_content, $matches, PREG_OFFSET_CAPTURE)) {
             // Replace existing diagram container (alternate attribute order)
             $match_start = $matches[0][1];
             $match_end = $match_start + strlen($matches[0][0]);
             
-            $html_content = substr($html_content, 0, $match_start) . $diagram_html_core . substr($html_content, $match_end);
+            $html_content = substr($html_content, 0, $match_start) . $diagram_html_replacement . substr($html_content, $match_end);
         } else if (preg_match($button_pattern, $html_content, $matches, PREG_OFFSET_CAPTURE)) {
             // Replace existing button placeholder without placeholders
-            $html_content = preg_replace($button_pattern, $diagram_html_core, $html_content);
+            $html_content = preg_replace($button_pattern, $diagram_html_replacement, $html_content);
         } else {
-            // Neither container nor button exists, insert at cursor position if available
-            // Build diagram with placeholders (dots) for easier cursor navigation
-            $diagram_html_new = '<p class="excalidraw-placeholder">' . $excalidraw_placeholder . '</p>' . 
-                               $diagram_html_core . 
-                               '<p class="excalidraw-placeholder">' . $excalidraw_placeholder . '</p>';
-            
-            if ($cursor_position !== null && !empty($html_content)) {
-                // Normalize HTML to text length comparable to DOM selection offsets
-                $plain_text = html_entity_decode($html_content, ENT_QUOTES | ENT_HTML5);
-                $plain_text = preg_replace('/<br\s*\/?\s*>/i', "\n", $plain_text);
-                $plain_text = preg_replace('/<\/(p|div|li|h[1-6])\s*>/i', "\n", $plain_text);
-                $plain_text = strip_tags($plain_text);
-                
-                // If cursor position is valid
-                if ($cursor_position >= 0 && $cursor_position <= mb_strlen($plain_text)) {
-                    // Find the HTML position that corresponds to the plain text position
-                    $html_position = findHtmlPositionFromTextOffset($html_content, $cursor_position);
-                    
-                    if ($html_position !== false) {
-                        // Insert the diagram at the calculated position
-                        $html_content = mb_substr($html_content, 0, $html_position) . 
-                                       $diagram_html_new . 
-                                       mb_substr($html_content, $html_position);
+            if ($is_markdown_note) {
+                // Markdown stores the editable source directly, so insert a raw HTML block.
+                $diagram_html_new = $diagram_html_replacement;
+
+                if ($cursor_position !== null && $html_content !== '') {
+                    $content_length = mb_strlen($html_content, 'UTF-8');
+                    if ($cursor_position >= 0 && $cursor_position <= $content_length) {
+                        $html_content = mb_substr($html_content, 0, $cursor_position, 'UTF-8') .
+                                       $diagram_html_new .
+                                       mb_substr($html_content, $cursor_position, $content_length - $cursor_position, 'UTF-8');
                     } else {
-                        // Fallback: add at the end if position calculation fails
                         $html_content .= $diagram_html_new;
                     }
+                } else if ($html_content === '') {
+                    $html_content = trim($diagram_html_new) . "\n";
                 } else {
-                    // Invalid cursor position, add at the end
                     $html_content .= $diagram_html_new;
                 }
-            } else if (empty($html_content)) {
-                // If note is completely empty, just add the diagram
-                $html_content = $diagram_html_new;
             } else {
-                // No cursor position provided, add diagram at the end of existing content
-                $html_content .= $diagram_html_new;
+                // Neither container nor button exists, insert at cursor position if available
+                // Build diagram with placeholders (dots) for easier cursor navigation
+                $diagram_html_new = '<p class="excalidraw-placeholder">' . $excalidraw_placeholder . '</p>' . 
+                                   $diagram_html_core . 
+                                   '<p class="excalidraw-placeholder">' . $excalidraw_placeholder . '</p>';
+                
+                if ($cursor_position !== null && !empty($html_content)) {
+                    // Normalize HTML to text length comparable to DOM selection offsets
+                    $plain_text = html_entity_decode($html_content, ENT_QUOTES | ENT_HTML5);
+                    $plain_text = preg_replace('/<br\s*\/?\s*>/i', "\n", $plain_text);
+                    $plain_text = preg_replace('/<\/(p|div|li|h[1-6])\s*>/i', "\n", $plain_text);
+                    $plain_text = strip_tags($plain_text);
+                    
+                    // If cursor position is valid
+                    if ($cursor_position >= 0 && $cursor_position <= mb_strlen($plain_text)) {
+                        // Find the HTML position that corresponds to the plain text position
+                        $html_position = findHtmlPositionFromTextOffset($html_content, $cursor_position);
+                        
+                        if ($html_position !== false) {
+                            // Insert the diagram at the calculated position
+                            $html_content = mb_substr($html_content, 0, $html_position) . 
+                                           $diagram_html_new . 
+                                           mb_substr($html_content, $html_position);
+                        } else {
+                            // Fallback: add at the end if position calculation fails
+                            $html_content .= $diagram_html_new;
+                        }
+                    } else {
+                        // Invalid cursor position, add at the end
+                        $html_content .= $diagram_html_new;
+                    }
+                } else if (empty($html_content)) {
+                    // If note is completely empty, just add the diagram
+                    $html_content = $diagram_html_new;
+                } else {
+                    // No cursor position provided, add diagram at the end of existing content
+                    $html_content .= $diagram_html_new;
+                }
             }
         }
         
-        // Save the updated HTML
-        if (file_put_contents($html_file, $html_content) === false) {
-            throw new Exception('Failed to write HTML file');
+        $content_to_save = $is_markdown_note ? sanitizeMarkdownContent($html_content) : $html_content;
+
+        // Save the updated note content
+        if (file_put_contents($content_file, $content_to_save) === false) {
+            throw new Exception('Failed to write note file');
         }
         
         // Update the database with the new content and last modified time
         $stmt = $con->prepare("UPDATE entries SET entry = ?, updated = datetime('now') WHERE id = ?");
-        $stmt->execute([$html_content, $note_id]);
+        $stmt->execute([$content_to_save, $note_id]);
         
         echo json_encode([
             'success' => true,

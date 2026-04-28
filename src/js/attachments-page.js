@@ -295,12 +295,12 @@
             if (isImage) {
                 previewContent = '<img src="' + fileUrl + '" alt="' + TXT.previewAlt + '" class="attachment-thumbnail" onclick="previewImage(\'' + fileUrl + '\', \'' + fileName.replace(/'/g, "\\'") + '\')">';
             } else if (isPDF) {
-                previewContent = '<div class="pdf-thumbnail" onclick="previewPDF(\'' + fileUrl + '\', \'' + fileName.replace(/'/g, "\\'") + '\')">' +
+                previewContent = '<div class="pdf-thumbnail" onclick="previewPDF(\'' + fileUrl + '\', \'' + fileName.replace(/'/g, "\\'") + '\', \'' + attachment.id + '\')">' +
                     '<iframe src="' + fileUrl + '" width="60" height="60" frameborder="0" style="pointer-events: none; transform: scale(0.8); transform-origin: top left;"></iframe>' +
                     '<div class="pdf-overlay"><span>' + TXT.pdfLabel + '</span></div>' +
                     '</div>';
             } else if (isVideo) {
-                previewContent = '<div class="video-thumbnail" onclick="downloadAttachment(\'' + attachment.id + '\')">' +
+                previewContent = '<div class="video-thumbnail" onclick="viewAttachment(\'' + attachment.id + '\')">' +
                     '<video src="' + fileUrl + '#t=0.1" muted playsinline preload="metadata"></video>' +
                     '<div class="video-overlay"><i class="lucide lucide-play"></i></div>' +
                     '</div>';
@@ -326,10 +326,17 @@
                 '</div>' +
                 '</div>' +
                 '<div class="attachment-actions">' +
-                '<button onclick="downloadAttachment(\'' + attachment.id + '\')" class="btn-icon btn-download" title="' + TXT.view + '">' +
+                '<button onclick="viewAttachment(\'' + attachment.id + '\')" class="btn-icon btn-view" title="' + TXT.view + '" aria-label="' + TXT.view + '">' +
                 '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
                 '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"></path>' +
                 '<circle cx="12" cy="12" r="3"></circle>' +
+                '</svg>' +
+                '</button>' +
+                '<button onclick="downloadAttachment(\'' + attachment.id + '\')" class="btn-icon btn-download" title="' + TXT.download + '" aria-label="' + TXT.download + '">' +
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M12 3v12"></path>' +
+                '<path d="m7 10 5 5 5-5"></path>' +
+                '<path d="M5 21h14"></path>' +
                 '</svg>' +
                 '</button>' +
                 '<button onclick="showDeleteAttachmentConfirm(\'' + attachment.id + '\')" class="btn-icon btn-delete" title="' + TXT.deleteTxt + '">' +
@@ -367,7 +374,7 @@
     }
 
     // Preview PDF in modal
-    function previewPDF(pdfUrl, fileName) {
+    function previewPDF(pdfUrl, fileName, attachmentId) {
         var modal = document.createElement('div');
         modal.className = 'image-preview-modal';
         modal.innerHTML = '<div class="pdf-preview-content">' +
@@ -378,7 +385,7 @@
             '<embed src="' + pdfUrl + '" type="application/pdf" width="90%" height="80%" style="margin: 20px auto; display: block; border-radius: 4px;">' +
             '<div class="pdf-preview-actions">' +
             '<button onclick="window.open(\'' + pdfUrl + '\', \'_blank\')" class="btn btn-primary">' + TXT.openNewTab + '</button>' +
-            '<button onclick="downloadAttachment(\'' + pdfUrl.split('attachment_id=')[1].split('&')[0] + '\')" class="btn btn-secondary">' + TXT.download + '</button>' +
+            '<button onclick="downloadAttachment(\'' + attachmentId + '\')" class="btn btn-secondary">' + TXT.download + '</button>' +
             '</div>' +
             '</div>';
 
@@ -391,13 +398,36 @@
         });
     }
 
-    // Download/view attachment
-    function downloadAttachment(attachmentId) {
+    function buildAttachmentUrl(attachmentId, forceDownload) {
         var url = '/api/v1/notes/' + noteId + '/attachments/' + attachmentId;
+        var queryParams = [];
         if (noteWorkspace) {
-            url += '?workspace=' + encodeURIComponent(noteWorkspace);
+            queryParams.push('workspace=' + encodeURIComponent(noteWorkspace));
         }
-        window.open(url, '_blank');
+        if (forceDownload) {
+            queryParams.push('download=1');
+        }
+        if (queryParams.length > 0) {
+            url += '?' + queryParams.join('&');
+        }
+        return url;
+    }
+
+    // Open attachment in a new tab when the file type supports inline viewing.
+    function viewAttachment(attachmentId) {
+        window.open(buildAttachmentUrl(attachmentId, false), '_blank');
+    }
+
+    // Download attachment
+    function downloadAttachment(attachmentId) {
+        var url = buildAttachmentUrl(attachmentId, true);
+        var link = document.createElement('a');
+        link.href = url;
+        link.download = '';
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 
     // Delete attachment
@@ -570,6 +600,7 @@
     // Expose functions globally for onclick handlers in dynamic HTML
     window.showFileName = showFileName;
     window.uploadAttachment = uploadAttachment;
+    window.viewAttachment = viewAttachment;
     window.downloadAttachment = downloadAttachment;
     window.previewImage = previewImage;
     window.previewPDF = previewPDF;

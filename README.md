@@ -396,7 +396,6 @@ Poznote supports two primary note formats, each tailored for different workflows
 *   **Editor:** Direct WYSIWYG (What You See Is What You Get) editing.
 *   **Storage:** Saved as `.html` files in the user data directory. Since they are standard HTML, they can be opened directly in any web browser.
 *   **Exclusive Features:**
-    *   **Excalidraw:** Integrated drawing board for hand-drawn diagrams and sketches.
     *   **Rich Formatting:** Native support for text colors, highlighting, and standard HTML elements.
     *   **Interactive UI:** Direct manipulation of elements in the editor.
 </details>

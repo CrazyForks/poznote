@@ -105,6 +105,16 @@ function getNormalizedCursorPosition(noteEntry, range) {
     return normalized.length;
 }
 
+function getTextCursorPosition(rootEl, range) {
+    if (!rootEl || !range) return null;
+
+    const preCaretRange = range.cloneRange();
+    preCaretRange.selectNodeContents(rootEl);
+    preCaretRange.setEnd(range.endContainer, range.endOffset);
+
+    return preCaretRange.toString().length;
+}
+
 
 // Insert Excalidraw diagram at cursor position in a note
 function insertExcalidrawDiagram() {
@@ -117,6 +127,8 @@ function insertExcalidrawDiagram() {
         if (noteEntryForPosition) {
             let range = null;
             const selection = window.getSelection();
+            const isMarkdownNoteForPosition = noteEntryForPosition.getAttribute('data-note-type') === 'markdown';
+            const markdownEditorForPosition = noteEntryForPosition.querySelector('.markdown-editor');
             
             // Try to get from slash command saved range first (most reliable for slash menu)
             if (window._slashCommandSavedRange && noteEntryForPosition.contains(window._slashCommandSavedRange.commonAncestorContainer)) {
@@ -126,7 +138,11 @@ function insertExcalidrawDiagram() {
             }
 
             if (range && noteEntryForPosition.contains(range.commonAncestorContainer)) {
-                capturedCursorPosition = getNormalizedCursorPosition(noteEntryForPosition, range);
+                if (isMarkdownNoteForPosition && markdownEditorForPosition && markdownEditorForPosition.contains(range.commonAncestorContainer)) {
+                    capturedCursorPosition = getTextCursorPosition(markdownEditorForPosition, range);
+                } else {
+                    capturedCursorPosition = getNormalizedCursorPosition(noteEntryForPosition, range);
+                }
             }
         }
     }
@@ -355,7 +371,13 @@ function openExcalidrawEditor(diagramId, cursorPosition = null) {
         if (selection.rangeCount > 0) {
             const range = selection.getRangeAt(0);
             if (noteEntry.contains(range.commonAncestorContainer)) {
-                cursorPosition = getNormalizedCursorPosition(noteEntry, range);
+                const isMarkdownNote = noteEntry.getAttribute('data-note-type') === 'markdown';
+                const markdownEditor = noteEntry.querySelector('.markdown-editor');
+                if (isMarkdownNote && markdownEditor && markdownEditor.contains(range.commonAncestorContainer)) {
+                    cursorPosition = getTextCursorPosition(markdownEditor, range);
+                } else {
+                    cursorPosition = getNormalizedCursorPosition(noteEntry, range);
+                }
             }
         }
     }
@@ -365,6 +387,7 @@ function openExcalidrawEditor(diagramId, cursorPosition = null) {
         noteId: currentNoteId,
         diagramId: diagramId,
         returnUrl: window.location.href,
+        noteType: noteEntry ? (noteEntry.getAttribute('data-note-type') || 'note') : 'note',
         cursorPosition: cursorPosition
     }));
 

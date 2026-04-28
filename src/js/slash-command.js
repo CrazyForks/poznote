@@ -162,17 +162,45 @@
 
     // Find the text node at a given offset
     function findTextNodeAtOffset(rootEl, offset) {
-        const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, null);
-        let node = walker.nextNode();
         let remaining = offset;
 
-        while (node) {
-            const len = node.nodeValue ? node.nodeValue.length : 0;
-            if (remaining <= len) {
-                return { node, offset: remaining };
+        function walk(node) {
+            if (!node) return null;
+
+            if (node.nodeType === Node.TEXT_NODE) {
+                const len = node.nodeValue ? node.nodeValue.length : 0;
+                if (remaining <= len) {
+                    return { node, offset: remaining };
+                }
+                remaining -= len;
+                return null;
             }
-            remaining -= len;
-            node = walker.nextNode();
+
+            if (node.nodeType === Node.ELEMENT_NODE && node.classList && node.classList.contains('markdown-excalidraw-placeholder')) {
+                const rawSource = node.getAttribute('data-markdown-source') || node.textContent || '';
+                const len = rawSource.length;
+                const parentNode = node.parentNode || rootEl;
+                const childIndex = Array.prototype.indexOf.call(parentNode.childNodes, node);
+                if (remaining <= len) {
+                    return { node: parentNode, offset: remaining === 0 ? childIndex : childIndex + 1 };
+                }
+                remaining -= len;
+                return null;
+            }
+
+            for (let child = node.firstChild; child; child = child.nextSibling) {
+                const match = walk(child);
+                if (match) {
+                    return match;
+                }
+            }
+
+            return null;
+        }
+
+        const match = walk(rootEl);
+        if (match) {
+            return match;
         }
 
         // Fallback: put caret at end
@@ -213,7 +241,11 @@
 
         const newText = fullText.slice(0, safeStart) + replacement + fullText.slice(safeEnd);
         // Force a plain-text representation with explicit \n so offsets stay stable.
-        rootEl.textContent = newText;
+        if (typeof window.renderMarkdownEditorContent === 'function') {
+            window.renderMarkdownEditorContent(rootEl, newText);
+        } else {
+            rootEl.textContent = newText;
+        }
 
         const newSelStart = typeof selectStartAfter === 'number' ? selectStartAfter : (safeStart + replacement.length);
         const newSelEnd = typeof selectEndAfter === 'number' ? selectEndAfter : newSelStart;
@@ -1713,6 +1745,7 @@
                             insertDateMarkdown();
                         }
                     },
+                    common.excalidraw,
                     common.emoji,
                     {
                         id: 'table',

@@ -112,6 +112,36 @@ pre.code-block .code-block-delete-btn,
     height: 14px;
 }
 
+.code-block-actions-host > .code-block-copy-btn,
+.code-block-actions-host > .code-block-delete-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    color: #8a8f98 !important;
+    opacity: 0.55 !important;
+}
+
+.code-block-actions-host > .code-block-copy-btn:hover,
+.code-block-actions-host > .code-block-delete-btn:hover {
+    opacity: 1 !important;
+}
+
+.code-block-actions-host > .code-block-copy-btn:hover {
+    color: #24292e !important;
+}
+
+.code-block-actions-host > .code-block-delete-btn:hover {
+    color: #d73a49 !important;
+}
+
+.code-block-actions-host > .code-block-copy-btn svg,
+.code-block-actions-host > .code-block-delete-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
 /* Additional specific rule to ensure padding is applied */
 .noteentry pre,
 pre.code-block,
@@ -332,48 +362,37 @@ body.code-block-no-wrap .noteentry div[style*='monospace'] {
 /* ── Desktop scrollbar for code blocks ─────────────────────────────────── */
 .noteentry pre::-webkit-scrollbar,
 pre.code-block::-webkit-scrollbar,
-.code-block::-webkit-scrollbar,
-pre code.hljs::-webkit-scrollbar {
+.code-block::-webkit-scrollbar {
     height: 8px;
 }
 
 .noteentry pre::-webkit-scrollbar-track,
 pre.code-block::-webkit-scrollbar-track,
-.code-block::-webkit-scrollbar-track,
-pre code.hljs::-webkit-scrollbar-track {
+.code-block::-webkit-scrollbar-track {
     background: transparent;
 }
 
 .noteentry pre::-webkit-scrollbar-thumb,
 pre.code-block::-webkit-scrollbar-thumb,
-.code-block::-webkit-scrollbar-thumb,
-pre code.hljs::-webkit-scrollbar-thumb {
+.code-block::-webkit-scrollbar-thumb {
     background: rgba(0, 0, 0, 0.15);
     border-radius: 2px;
 }
 
 .noteentry pre::-webkit-scrollbar-thumb:hover,
 pre.code-block::-webkit-scrollbar-thumb:hover,
-.code-block::-webkit-scrollbar-thumb:hover,
-pre code.hljs::-webkit-scrollbar-thumb:hover {
+.code-block::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 0, 0, 0.30);
 }
 
 html[data-theme='dark'] .noteentry pre::-webkit-scrollbar-thumb,
 html[data-theme='dark'] pre.code-block::-webkit-scrollbar-thumb,
-html[data-theme='dark'] .code-block::-webkit-scrollbar-thumb,
-html[data-theme='dark'] pre code.hljs::-webkit-scrollbar-thumb {
+html[data-theme='dark'] .code-block::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.2);
 }
 
 html[data-theme='dark'] .noteentry pre::-webkit-scrollbar-thumb:hover,
 html[data-theme='dark'] pre.code-block::-webkit-scrollbar-thumb:hover,
-html[data-theme='dark'] .code-block::-webkit-scrollbar-thumb:hover,
-html[data-theme='dark'] pre code.hljs::-webkit-scrollbar-thumb:hover {
+html[data-theme='dark'] .code-block::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.35);
-}
-
-/* Space between last line of code and the scrollbar - only when scrollbar is visible */
-pre code.hljs.has-x-overflow {
-    padding-bottom: 20px !important;
 }

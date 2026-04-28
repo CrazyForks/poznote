@@ -155,38 +155,214 @@
         return text;
     }
 
+    function getCodeBlockElement(candidate) {
+        if (!candidate || !candidate.tagName) return null;
+
+        var tagName = candidate.tagName.toLowerCase();
+        if (tagName === 'pre') {
+            return candidate;
+        }
+
+        if (tagName === 'code' && candidate.parentElement && candidate.parentElement.tagName.toLowerCase() === 'pre') {
+            return candidate.parentElement;
+        }
+
+        return candidate;
+    }
+
+    function getCodeBlockElements(container) {
+        var blocks = [];
+        var root = container || document;
+
+        root.querySelectorAll('pre, .code-block').forEach(function(candidate) {
+            var block = getCodeBlockElement(candidate);
+            if (block && blocks.indexOf(block) === -1) {
+                blocks.push(block);
+            }
+        });
+
+        return blocks;
+    }
+
+    function isDedicatedActionHost(host, block) {
+        if (!host || !host.classList || !host.classList.contains('code-block-actions-host')) {
+            return false;
+        }
+
+        var hostedBlocks = getCodeBlockElements(host);
+        return hostedBlocks.length === 1 && hostedBlocks[0] === block;
+    }
+
+    function styleActionHost(host) {
+        host.style.position = 'relative';
+        host.style.maxWidth = '100%';
+        host.style.boxSizing = 'border-box';
+    }
+
+    function findActionButton(block, actionHost, className) {
+        var selector = '.' + className;
+        var button = block.querySelector ? block.querySelector(selector) : null;
+        if (button) return button;
+
+        if (!actionHost || !actionHost.children) return null;
+
+        for (var i = 0; i < actionHost.children.length; i++) {
+            var child = actionHost.children[i];
+            if (child.classList && child.classList.contains(className)) {
+                return child;
+            }
+        }
+
+        return null;
+    }
+
+    function isActionButtonNode(node) {
+        return !!(node && node.nodeType === 1 && node.classList &&
+            (node.classList.contains('code-block-copy-btn') || node.classList.contains('code-block-delete-btn')));
+    }
+
+    function isDisposableActionHost(host) {
+        if (!host || !host.classList || !host.classList.contains('code-block-actions-host')) {
+            return false;
+        }
+
+        return Array.from(host.childNodes).every(function(node) {
+            return (node.nodeType === 3 && node.textContent.trim() === '') || isActionButtonNode(node);
+        });
+    }
+
+    function removeNode(node) {
+        if (node && node.parentNode) {
+            node.parentNode.removeChild(node);
+        }
+    }
+
+    function removeDirectActionButtons(host) {
+        if (!host || !host.children) return;
+
+        Array.from(host.children).forEach(function(child) {
+            if (isActionButtonNode(child)) {
+                removeNode(child);
+            }
+        });
+    }
+
+    function removeCodeBlockDom(block, copyButton, deleteButton) {
+        var targetBlock = getCodeBlockElement(block);
+        if (!targetBlock) return;
+
+        var actionHost = targetBlock.parentElement;
+        if (!actionHost || !actionHost.classList || !actionHost.classList.contains('code-block-actions-host')) {
+            actionHost = null;
+        }
+
+        removeNode(copyButton || findActionButton(targetBlock, actionHost, 'code-block-copy-btn'));
+        removeNode(deleteButton || findActionButton(targetBlock, actionHost, 'code-block-delete-btn'));
+        removeNode(targetBlock);
+
+        if (isDisposableActionHost(actionHost)) {
+            removeNode(actionHost);
+        }
+    }
+
+    function findMarkdownFenceRange(lines, targetIndex) {
+        var currentIndex = -1;
+        var inBlock = false;
+        var startLine = -1;
+
+        for (var i = 0; i < lines.length; i++) {
+            if (!/^\s*```/.test(lines[i])) {
+                continue;
+            }
+
+            if (!inBlock) {
+                currentIndex++;
+                startLine = i;
+                inBlock = true;
+            } else {
+                if (currentIndex === targetIndex) {
+                    return { start: startLine, end: i };
+                }
+                inBlock = false;
+                startLine = -1;
+            }
+        }
+
+        if (inBlock && currentIndex === targetIndex) {
+            return { start: startLine, end: lines.length - 1 };
+        }
+
+        return null;
+    }
+
+    function deleteMarkdownCodeBlock(markdownPreview, block) {
+        var targetPre = getCodeBlockElement(block);
+        if (!markdownPreview || !targetPre || targetPre.tagName.toLowerCase() !== 'pre') {
+            return false;
+        }
+
+        var noteEntry = markdownPreview.closest('.noteentry');
+        if (!noteEntry) return false;
+
+        var noteId = noteEntry.id.replace('entry', '');
+        var editorDiv = noteEntry.querySelector('.markdown-editor');
+        if (!editorDiv) return false;
+
+        var allPres = Array.from(markdownPreview.querySelectorAll('pre'));
+        var preIndex = allPres.indexOf(targetPre);
+        if (preIndex === -1) return false;
+
+        var content = typeof window.getMarkdownContent === 'function'
+            ? window.getMarkdownContent(noteId)
+            : editorDiv.textContent;
+        var lines = content.split('\n');
+        var range = findMarkdownFenceRange(lines, preIndex);
+
+        if (!range) {
+            showToast('Could not find the source code block to delete');
+            return true;
+        }
+
+        lines.splice(range.start, range.end - range.start + 1);
+        var newContent = lines.join('\n');
+        editorDiv.textContent = newContent;
+        noteEntry.setAttribute('data-markdown-content', newContent);
+
+        if (typeof window.markNoteAsModified === 'function') {
+            window.markNoteAsModified();
+        }
+
+        if (noteEntry.classList.contains('markdown-split-mode')) {
+            editorDiv.dispatchEvent(new Event('input', { bubbles: true }));
+        } else if (typeof window.switchToPreviewMode === 'function') {
+            window.switchToPreviewMode(noteId);
+        }
+
+        return true;
+    }
+
     function ensureCodeBlockActionHost(block) {
+        block = getCodeBlockElement(block);
         if (!block || !block.parentNode) return block;
 
         var host = block.parentElement;
-        if (host && host.classList && host.classList.contains('code-block-actions-host')) {
-            host.style.position = 'relative';
-            host.style.maxWidth = '100%';
-            host.style.boxSizing = 'border-box';
+        if (isDedicatedActionHost(host, block)) {
+            styleActionHost(host);
             return host;
+        }
+
+        if (host && host.classList && host.classList.contains('code-block-actions-host')) {
+            removeDirectActionButtons(host);
         }
 
         host = document.createElement('div');
         host.className = 'code-block-actions-host';
-        host.style.position = 'relative';
-        host.style.maxWidth = '100%';
-        host.style.boxSizing = 'border-box';
+        styleActionHost(host);
 
         block.parentNode.insertBefore(host, block);
         host.appendChild(block);
 
         return host;
-    }
-
-    function getCodeBlockRemovalTarget(block) {
-        if (!block) return block;
-
-        var host = block.parentElement;
-        if (host && host.classList && host.classList.contains('code-block-actions-host')) {
-            return host;
-        }
-
-        return block;
     }
 
     function canDeleteCodeBlock(block) {
@@ -196,7 +372,7 @@
     // Add copy button to code blocks
     function addCopyButtonToCodeBlocks() {
         // Find all code blocks
-        var codeBlocks = document.querySelectorAll('pre, .code-block');
+        var codeBlocks = getCodeBlockElements(document);
         
         codeBlocks.forEach(function(block) {
             // Skip inline code elements
@@ -208,8 +384,8 @@
             var allowDelete = canDeleteCodeBlock(block);
             
             // Check if button already exists
-            var existingBtn = block.querySelector('.code-block-copy-btn') || actionHost.querySelector('.code-block-copy-btn');
-            var existingDelBtn = block.querySelector('.code-block-delete-btn') || actionHost.querySelector('.code-block-delete-btn');
+            var existingBtn = findActionButton(block, actionHost, 'code-block-copy-btn');
+            var existingDelBtn = findActionButton(block, actionHost, 'code-block-delete-btn');
             var btn;
             var delBtn;
             
@@ -321,67 +497,13 @@
                 var doDelete = function() {
                     // --- Markdown mode: update source and re-render ---
                     var markdownPreview = block.closest('.markdown-preview');
-                    if (markdownPreview) {
-                        var noteEntry = markdownPreview.closest('.noteentry');
-                        if (noteEntry) {
-                            var noteId   = noteEntry.id.replace('entry', '');
-                            var editorDiv = noteEntry.querySelector('.markdown-editor');
-                            if (editorDiv) {
-                                // Determine index of this <pre> among all <pre> in the preview
-                                var allPres  = Array.from(markdownPreview.querySelectorAll('pre'));
-                                var preIndex = allPres.indexOf(block);
-                                if (preIndex !== -1) {
-                                    var content = typeof window.getMarkdownContent === 'function'
-                                        ? window.getMarkdownContent(noteId)
-                                        : editorDiv.textContent;
-                                    var lines = content.split('\n');
-                                    // Find the nth fenced code block (``` … ```)
-                                    var blockCount = -1;
-                                    var startLine  = -1;
-                                    var endLine    = -1;
-                                    var inBlock    = false;
-                                    for (var i = 0; i < lines.length; i++) {
-                                        if (/^\s*```/.test(lines[i])) {
-                                            if (!inBlock) {
-                                                blockCount++;
-                                                if (blockCount === preIndex) {
-                                                    startLine = i;
-                                                    inBlock   = true;
-                                                }
-                                            } else {
-                                                if (blockCount === preIndex) {
-                                                    endLine = i;
-                                                    break;
-                                                }
-                                                inBlock = false;
-                                            }
-                                        }
-                                    }
-                                    if (startLine !== -1 && endLine !== -1) {
-                                        lines.splice(startLine, endLine - startLine + 1);
-                                        var newContent = lines.join('\n');
-                                        editorDiv.textContent = newContent;
-                                        noteEntry.setAttribute('data-markdown-content', newContent);
-                                        if (typeof window.markNoteAsModified === 'function') {
-                                            window.markNoteAsModified();
-                                        }
-                                        // Re-render the preview
-                                        if (noteEntry.classList.contains('markdown-split-mode')) {
-                                            editorDiv.dispatchEvent(new Event('input', { bubbles: true }));
-                                        } else if (typeof window.switchToPreviewMode === 'function') {
-                                            window.switchToPreviewMode(noteId);
-                                        }
-                                        return;
-                                    }
-                                }
-                            }
-                        }
+                    if (markdownPreview && deleteMarkdownCodeBlock(markdownPreview, block)) {
+                        return;
                     }
 
                     // --- Rich-text mode: remove the DOM block directly ---
                     var noteentry = block.closest('.noteentry') || document.querySelector('.noteentry');
-                    var removalTarget = getCodeBlockRemovalTarget(block);
-                    removalTarget.remove();
+                    removeCodeBlockDom(block, btn, delBtn);
                     if (typeof window.markNoteAsModified === 'function') {
                         window.markNoteAsModified();
                     }
@@ -404,7 +526,13 @@
     // Detect horizontal overflow on code blocks and toggle 'has-x-overflow' class
     // to avoid reserving scrollbar space when no horizontal scroll is needed.
     function updateCodeBlockOverflow() {
-        var blocks = document.querySelectorAll('pre code.hljs, pre.code-block, .code-block');
+        var blocks = getCodeBlockElements(document);
+        var highlightedCodeBlocks = document.querySelectorAll('pre code.hljs.has-x-overflow');
+
+        highlightedCodeBlocks.forEach(function(codeBlock) {
+            codeBlock.classList.remove('has-x-overflow');
+        });
+
         blocks.forEach(function(block) {
             if (block.scrollWidth > block.clientWidth) {
                 block.classList.add('has-x-overflow');
