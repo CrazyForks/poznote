@@ -708,7 +708,13 @@ function initMermaid(retryCount) {
 
     // Initialize Mermaid only once per theme to prevent issues with re-initialization
     if (!window.mermaidInitialized || window.mermaidTheme !== theme) {
-        mermaid.initialize({ startOnLoad: false, theme: theme });
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: theme,
+            flowchart: {
+                htmlLabels: false
+            }
+        });
         window.mermaidInitialized = true;
         window.mermaidTheme = theme;
     }
@@ -822,7 +828,13 @@ function initMermaid(retryCount) {
         // Fallback for older versions
         try {
             if (!window.mermaidInitialized || window.mermaidTheme !== theme) {
-                mermaid.initialize({ startOnLoad: false, theme: theme });
+                mermaid.initialize({
+                    startOnLoad: false,
+                    theme: theme,
+                    flowchart: {
+                        htmlLabels: false
+                    }
+                });
                 window.mermaidInitialized = true;
                 window.mermaidTheme = theme;
             }
