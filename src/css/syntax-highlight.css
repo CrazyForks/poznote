@@ -14,8 +14,12 @@ pre code.hljs,
 /* Base styles for code blocks */
 pre code.hljs {
     display: block;
-    overflow-x: auto;
-    padding: 1em;
+    overflow: visible;
+    padding: 0 !important;
+}
+
+pre code.hljs.has-x-overflow {
+    padding-bottom: 0 !important;
 }
 
 code.hljs {
