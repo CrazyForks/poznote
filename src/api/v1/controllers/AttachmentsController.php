@@ -259,6 +259,7 @@ class AttachmentsController {
      */
     public function show($noteId, $attachmentId) {
         $workspace = $_GET['workspace'] ?? null;
+        $forceDownload = isset($_GET['download']) && $_GET['download'] !== '0';
         
         if (empty($noteId) || empty($attachmentId)) {
             http_response_code(400);
@@ -343,8 +344,11 @@ class AttachmentsController {
                             
                             $inlineTextContentType = $this->getSafeInlineTextContentType($attachment);
 
+                            if ($forceDownload) {
+                                header('Content-Type: application/octet-stream');
+                                header('Content-Disposition: attachment; filename="' . $safeFilename . '"');
                             // Allow a small whitelist of passive text formats to be viewed directly.
-                            if ($inlineTextContentType !== null) {
+                            } elseif ($inlineTextContentType !== null) {
                                 header('Content-Type: ' . $inlineTextContentType);
                                 header('Content-Disposition: inline; filename="' . $safeFilename . '"');
                             } elseif (strpos($file_type, 'application/pdf') !== false || 

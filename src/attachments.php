@@ -255,7 +255,7 @@ try {
         <div class="section-bottom-spacer"></div>
     </div>
 
-    <script src="js/attachments-page.js"></script>
+    <script src="js/attachments-page.js?v=<?php echo $v; ?>"></script>
     
     <!-- Delete Attachment Confirmation Modal -->
     <div id="deleteAttachmentConfirmModal" class="modal">
