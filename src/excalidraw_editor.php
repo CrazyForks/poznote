@@ -35,11 +35,13 @@ if ($note_id > 0) {
         $existing_data = null; // This will hold the extracted JSON
         
         if ($is_embedded_diagram) {
-            // Embedded diagram mode: look for specific diagram data (always in .html files)
+            // Embedded diagram mode: look for specific diagram data in the note's native file.
             require_once 'functions.php';
-            $html_file = getEntriesPath() . '/' . $note_id . '.html';
-            if (file_exists($html_file)) {
-                $html_content = file_get_contents($html_file);
+            $content_file = getEntryFilename($note_id, $note['type'] ?? 'note');
+            $legacy_html_file = getEntriesPath() . '/' . $note_id . '.html';
+            $read_file = file_exists($content_file) ? $content_file : $legacy_html_file;
+            if (file_exists($read_file)) {
+                $html_content = file_get_contents($read_file);
                 // Look for the specific diagram container
                 // Use 's' modifier (DOTALL) to match newlines, and be flexible with attribute order
                 // First find the div with the matching id, then extract data-excalidraw from it

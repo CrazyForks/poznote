@@ -76,6 +76,86 @@ function renderMarkdownMermaidBlock($source) {
     return '<div class="mermaid" data-mermaid-source="' . $escapedAttribute . '">' . $escapedSource . '</div>';
 }
 
+function isSafeMarkdownExcalidrawUrl($src) {
+    $value = trim((string)$src);
+    return preg_match('#^(https?://|/|\./|\.\./)#i', $value) === 1
+        || preg_match('#^data:image/(png|jpeg|jpg|gif|webp);base64,#i', $value) === 1;
+}
+
+function isDangerousMarkdownExcalidrawAttributeValue($value) {
+    return preg_match('#javascript:|vbscript:|data:(?!image/)#i', (string)$value) === 1;
+}
+
+function buildMarkdownExcalidrawAttributes(DOMElement $element, array $allowedAttrs) {
+    $attrs = [];
+
+    foreach ($allowedAttrs as $attrName) {
+        if (!$element->hasAttribute($attrName)) {
+            continue;
+        }
+
+        $attrValue = $element->getAttribute($attrName);
+        if ($attrName === 'src' && !isSafeMarkdownExcalidrawUrl($attrValue)) {
+            continue;
+        }
+        if ($attrName !== 'data-excalidraw' && isDangerousMarkdownExcalidrawAttributeValue($attrValue)) {
+            continue;
+        }
+
+        $attrs[] = $attrName . '="' . htmlspecialchars($attrValue, ENT_QUOTES, 'UTF-8') . '"';
+    }
+
+    return empty($attrs) ? '' : ' ' . implode(' ', $attrs);
+}
+
+function sanitizeMarkdownExcalidrawContainer($html) {
+    if (trim((string)$html) === '') {
+        return '';
+    }
+
+    $previous = libxml_use_internal_errors(true);
+    $dom = new DOMDocument();
+    $dom->encoding = 'UTF-8';
+    @$dom->loadHTML('<html><body>' . $html . '</body></html>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+
+    $xpath = new DOMXPath($dom);
+    $container = $xpath->query('//div[contains(concat(" ", normalize-space(@class), " "), " excalidraw-container ")]')->item(0);
+    if (!$container instanceof DOMElement) {
+        return htmlspecialchars($html, ENT_QUOTES, 'UTF-8');
+    }
+
+    $divAttrs = buildMarkdownExcalidrawAttributes($container, ['id', 'class', 'style', 'data-diagram-id', 'data-excalidraw', 'contenteditable']);
+    $childHtml = '';
+
+    foreach ($container->childNodes as $child) {
+        if ($child->nodeType === XML_TEXT_NODE) {
+            $childHtml .= htmlspecialchars($child->textContent, ENT_QUOTES, 'UTF-8');
+            continue;
+        }
+        if ($child->nodeType !== XML_ELEMENT_NODE) {
+            continue;
+        }
+
+        $tagName = strtolower($child->nodeName);
+        if ($tagName === 'img' && $child instanceof DOMElement) {
+            $childHtml .= '<img' . buildMarkdownExcalidrawAttributes($child, ['src', 'alt', 'title', 'class', 'style', 'width', 'height', 'data-is-excalidraw', 'data-excalidraw-note-id', 'loading', 'decoding']) . '>';
+        } elseif ($tagName === 'i' && $child instanceof DOMElement) {
+            $childHtml .= '<i' . buildMarkdownExcalidrawAttributes($child, ['class', 'style']) . '></i>';
+        } elseif ($tagName === 'p' && $child instanceof DOMElement) {
+            $childHtml .= '<p' . buildMarkdownExcalidrawAttributes($child, ['class', 'style']) . '>' . htmlspecialchars($child->textContent, ENT_QUOTES, 'UTF-8') . '</p>';
+        } elseif ($tagName === 'div' && $child instanceof DOMElement) {
+            $class = $child->getAttribute('class');
+            if (preg_match('/(^|\s)excalidraw-data(\s|$)/', $class)) {
+                $childHtml .= '<div' . buildMarkdownExcalidrawAttributes($child, ['class', 'style']) . '>' . htmlspecialchars($child->textContent, ENT_QUOTES, 'UTF-8') . '</div>';
+            }
+        }
+    }
+
+    return '<div' . $divAttrs . '>' . $childHtml . '</div>';
+}
+
 function parseMarkdown($text) {
     if (!$text) return '';
     
@@ -180,6 +260,14 @@ function parseMarkdown($text) {
         $protectedElements[$protectedIndex] = $linkTag;
         $protectedIndex++;
         return $placeholder;
+    }, $text);
+
+    // Protect Poznote-generated Excalidraw containers as safe block HTML.
+    $text = preg_replace_callback('#<div\b(?=[^>]*\bclass\s*=\s*(["\'])[^"\']*\bexcalidraw-container\b[^"\']*\1)[^>]*>[\s\S]*?</div>#i', function($matches) use (&$protectedElements, &$protectedIndex) {
+        $placeholder = "\x00PEXCALIDRAW" . $protectedIndex . "\x00";
+        $protectedElements[$protectedIndex] = sanitizeMarkdownExcalidrawContainer($matches[0]);
+        $protectedIndex++;
+        return "\n" . $placeholder . "\n";
     }, $text);
     
     // Protect inline span tags with style attributes (for colors, backgrounds, etc.)
@@ -401,8 +489,8 @@ function parseMarkdown($text) {
             return $matches[0];
         }, $text);
         
-        // Restore protected elements (images, links, spans, tags, iframes, videos, and audio)
-        $text = preg_replace_callback('/\x00P(IMG|LNK|SPAN|TAG|IFRAME|VIDEO|AUDIO)(\d+)\x00/', function($matches) use ($protectedElements) {
+        // Restore protected elements (images, links, spans, tags, iframes, videos, audio, and Excalidraw)
+        $text = preg_replace_callback('/\x00P(IMG|LNK|SPAN|TAG|IFRAME|VIDEO|AUDIO|EXCALIDRAW)(\d+)\x00/', function($matches) use ($protectedElements) {
             $index = (int)$matches[2];
             return isset($protectedElements[$index]) ? $protectedElements[$index] : $matches[0];
         }, $text);
@@ -451,6 +539,13 @@ function parseMarkdown($text) {
     
     for ($i = 0; $i < count($lines); $i++) {
         $line = $lines[$i];
+
+        if (preg_match('/^\s*\x00PEXCALIDRAW(\d+)\x00\s*$/', $line, $matches)) {
+            $flushParagraph();
+            $index = (int)$matches[1];
+            $result[] = isset($protectedElements[$index]) ? $protectedElements[$index] : $line;
+            continue;
+        }
 
         // Check for protected HTML block tags (details, summary)
         // This ensures they are treated as block-level elements
@@ -508,6 +603,7 @@ function parseMarkdown($text) {
                 // Check for various block-level elements
                 $isNextBlockElement = (
                     preg_match('/\x00CODEBLOCK\d+\x00/', $nextLine) ||  // Code block
+                    preg_match('/^\s*\x00PEXCALIDRAW\d+\x00\s*$/', $nextLine) || // Excalidraw block
                     preg_match('/\x00MATHBLOCK\d+\x00/', $nextLine) ||  // Math block
                     preg_match('/^\x00PTAG\d+\x00/', $nextLine) ||      // HTML tags
                     preg_match('/^#{1,6}\s+/', $nextLine) ||            // Headers

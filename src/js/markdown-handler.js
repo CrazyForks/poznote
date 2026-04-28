@@ -27,6 +27,72 @@ function _mdRenderMermaidBlock(source) {
     return '<div class="mermaid" data-mermaid-source="' + _mdEscapeHtmlAttribute(mermaidSource) + '">' + escapedSource + '</div>';
 }
 
+function _mdGetExcalidrawBlockRegex() {
+    return /<div\b(?=[^>]*\bclass\s*=\s*(["'])[^"']*\bexcalidraw-container\b[^"']*\1)[^>]*>[\s\S]*?<\/div>/gi;
+}
+
+function _mdIsExcalidrawEditorPlaceholder(node) {
+    return !!(node && node.nodeType === Node.ELEMENT_NODE && node.classList && node.classList.contains('markdown-excalidraw-placeholder'));
+}
+
+function _mdGetExcalidrawEditorPlaceholderSource(node) {
+    if (!_mdIsExcalidrawEditorPlaceholder(node)) {
+        return '';
+    }
+    return node.getAttribute('data-markdown-source') || node.textContent || '';
+}
+
+function _mdBuildExcalidrawEditorSummary(rawHtml) {
+    var diagramIdMatch = String(rawHtml || '').match(/\bdata-diagram-id=(['"])(.*?)\1/i);
+    var diagramId = diagramIdMatch && diagramIdMatch[2] ? (' #' + diagramIdMatch[2]) : '';
+    return 'Excalidraw' + diagramId + ' ...';
+}
+
+function _mdCreateExcalidrawEditorPlaceholder(rawHtml) {
+    var placeholder = document.createElement('span');
+    placeholder.className = 'markdown-excalidraw-placeholder';
+    placeholder.contentEditable = 'false';
+    placeholder.setAttribute('spellcheck', 'false');
+    placeholder.setAttribute('data-markdown-source', rawHtml);
+    placeholder.setAttribute('data-summary', _mdBuildExcalidrawEditorSummary(rawHtml));
+    return placeholder;
+}
+
+function renderMarkdownEditorContent(editorDiv, content) {
+    if (!editorDiv) {
+        return;
+    }
+
+    var rawContent = String(content || '');
+    var pattern = _mdGetExcalidrawBlockRegex();
+    var match = pattern.exec(rawContent);
+
+    if (!match) {
+        editorDiv.textContent = rawContent;
+        return;
+    }
+
+    pattern.lastIndex = 0;
+    editorDiv.innerHTML = '';
+
+    var fragment = document.createDocumentFragment();
+    var lastIndex = 0;
+
+    while ((match = pattern.exec(rawContent)) !== null) {
+        if (match.index > lastIndex) {
+            fragment.appendChild(document.createTextNode(rawContent.slice(lastIndex, match.index)));
+        }
+        fragment.appendChild(_mdCreateExcalidrawEditorPlaceholder(match[0]));
+        lastIndex = pattern.lastIndex;
+    }
+
+    if (lastIndex < rawContent.length) {
+        fragment.appendChild(document.createTextNode(rawContent.slice(lastIndex)));
+    }
+
+    editorDiv.appendChild(fragment);
+}
+
 // Helper function to normalize content from contentEditable
 function normalizeContentEditableText(element) {
     // More robust content extraction that handles contentEditable quirks
@@ -44,6 +110,11 @@ function normalizeContentEditableText(element) {
                 var textContent = node.textContent || node.nodeValue || '';
                 parts.push(textContent);
             } else if (node.nodeType === Node.ELEMENT_NODE) {
+                if (_mdIsExcalidrawEditorPlaceholder(node)) {
+                    parts.push(_mdGetExcalidrawEditorPlaceholderSource(node));
+                    continue;
+                }
+
                 var tagName = node.tagName;
 
                 if (['DIV', 'P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].indexOf(tagName) !== -1) {
@@ -133,22 +204,55 @@ function setSelectionOffsetsInTextElement(element, startOffset, endOffset) {
     }
 
     var findNodeAndOffset = function (targetOffset) {
-        var walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
         var traversed = 0;
-        var textNode;
 
-        while ((textNode = walker.nextNode())) {
-            var nextTraversed = traversed + textNode.textContent.length;
-            if (targetOffset <= nextTraversed) {
-                return {
-                    node: textNode,
-                    offset: targetOffset - traversed
-                };
+        function walk(node) {
+            if (!node) {
+                return null;
             }
-            traversed = nextTraversed;
+
+            if (node.nodeType === Node.TEXT_NODE) {
+                var textLength = (node.textContent || '').length;
+                var nextTraversed = traversed + textLength;
+                if (targetOffset <= nextTraversed) {
+                    return {
+                        node: node,
+                        offset: targetOffset - traversed
+                    };
+                }
+                traversed = nextTraversed;
+                return null;
+            }
+
+            if (_mdIsExcalidrawEditorPlaceholder(node)) {
+                var rawSource = _mdGetExcalidrawEditorPlaceholderSource(node);
+                var rawLength = rawSource.length;
+                var nextPlaceholderOffset = traversed + rawLength;
+                if (targetOffset <= nextPlaceholderOffset) {
+                    var parentNode = node.parentNode || element;
+                    var childIndex = Array.prototype.indexOf.call(parentNode.childNodes, node);
+                    return {
+                        node: parentNode,
+                        offset: targetOffset <= traversed ? childIndex : childIndex + 1
+                    };
+                }
+                traversed = nextPlaceholderOffset;
+                return null;
+            }
+
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                for (var child = node.firstChild; child; child = child.nextSibling) {
+                    var match = walk(child);
+                    if (match) {
+                        return match;
+                    }
+                }
+            }
+
+            return null;
         }
 
-        return {
+        return walk(element) || {
             node: element,
             offset: element.childNodes.length
         };
@@ -197,7 +301,7 @@ function getMarkdownIndentWidth(indent) {
 }
 
 function updateMarkdownEditorContent(editorDiv, noteEntry, noteId, content, selectionStart, selectionEnd) {
-    editorDiv.textContent = content;
+    renderMarkdownEditorContent(editorDiv, content);
     noteEntry.setAttribute('data-markdown-content', content);
 
     if (typeof noteid !== 'undefined') {
@@ -882,6 +986,71 @@ function parseMarkdown(text) {
         return normalizedLanguage === 'normal' || normalizedLanguage === 'code';
     }
 
+    function isSafeExcalidrawUrl(src) {
+        var value = String(src || '').trim();
+        return /^(https?:\/\/|\/|\.\/|\.\.\/)/i.test(value) || /^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(value);
+    }
+
+    function isDangerousExcalidrawAttributeValue(value) {
+        return /javascript:|vbscript:|data:(?!image\/)/i.test(String(value || ''));
+    }
+
+    function getSafeExcalidrawAttrs(element, allowedAttrs) {
+        var attrs = [];
+        for (var i = 0; i < allowedAttrs.length; i++) {
+            var attrName = allowedAttrs[i];
+            if (!element.hasAttribute(attrName)) {
+                continue;
+            }
+
+            var attrValue = element.getAttribute(attrName) || '';
+            if (attrName === 'src' && !isSafeExcalidrawUrl(attrValue)) {
+                continue;
+            }
+            if (attrName !== 'data-excalidraw' && isDangerousExcalidrawAttributeValue(attrValue)) {
+                continue;
+            }
+
+            attrs.push(attrName + '="' + escapeHtml(attrValue) + '"');
+        }
+        return attrs.length ? ' ' + attrs.join(' ') : '';
+    }
+
+    function sanitizeExcalidrawContainerHtml(html) {
+        var template = document.createElement('template');
+        template.innerHTML = String(html || '').trim();
+        var container = template.content.firstElementChild;
+        if (!container || container.tagName !== 'DIV' || !container.classList.contains('excalidraw-container')) {
+            return escapeHtml(html);
+        }
+
+        var divAttrs = getSafeExcalidrawAttrs(container, ['id', 'class', 'style', 'data-diagram-id', 'data-excalidraw', 'contenteditable']);
+        var childHtml = '';
+
+        Array.prototype.forEach.call(container.childNodes, function (child) {
+            if (child.nodeType === Node.TEXT_NODE) {
+                childHtml += escapeHtml(child.textContent || '');
+                return;
+            }
+            if (child.nodeType !== Node.ELEMENT_NODE) {
+                return;
+            }
+
+            var tagName = child.tagName.toLowerCase();
+            if (tagName === 'img') {
+                childHtml += '<img' + getSafeExcalidrawAttrs(child, ['src', 'alt', 'title', 'class', 'style', 'width', 'height', 'data-is-excalidraw', 'data-excalidraw-note-id', 'loading', 'decoding']) + '>';
+            } else if (tagName === 'i') {
+                childHtml += '<i' + getSafeExcalidrawAttrs(child, ['class', 'style']) + '></i>';
+            } else if (tagName === 'p') {
+                childHtml += '<p' + getSafeExcalidrawAttrs(child, ['class', 'style']) + '>' + escapeHtml(child.textContent || '') + '</p>';
+            } else if (tagName === 'div' && child.classList.contains('excalidraw-data')) {
+                childHtml += '<div' + getSafeExcalidrawAttrs(child, ['class', 'style']) + '>' + escapeHtml(child.textContent || '') + '</div>';
+            }
+        });
+
+        return '<div' + divAttrs + '>' + childHtml + '</div>';
+    }
+
     // Extract and protect fenced code blocks first so they are not processed by other rules
     let protectedFencedCode = [];
     let fencedCodeIndex = 0;
@@ -992,6 +1161,14 @@ function parseMarkdown(text) {
         protectedElements[protectedIndex] = linkTag;
         protectedIndex++;
         return placeholder;
+    });
+
+    // Protect Poznote-generated Excalidraw containers as safe block HTML.
+    text = text.replace(/<div\b(?=[^>]*\bclass\s*=\s*(["'])[^"']*\bexcalidraw-container\b[^"']*\1)[^>]*>[\s\S]*?<\/div>/gi, function (match) {
+        let placeholder = '\x00PEXCALIDRAW' + protectedIndex + '\x00';
+        protectedElements[protectedIndex] = sanitizeExcalidrawContainerHtml(match);
+        protectedIndex++;
+        return '\n' + placeholder + '\n';
     });
 
     // Protect inline span tags with style attributes (for colors, backgrounds, etc.)
@@ -1258,8 +1435,8 @@ function parseMarkdown(text) {
             return (typeof code !== 'undefined') ? '<code>' + escapeHtml(code) + '</code>' : match;
         });
 
-        // Restore protected elements (images, links, spans, tags, iframes, videos, and audio)
-        text = text.replace(/\x00P(IMG|LNK|SPAN|TAG|IFRAME|VIDEO|AUDIO)(\d+)\x00/g, function (match, type, index) {
+        // Restore protected elements (images, links, spans, tags, iframes, videos, audio, and Excalidraw)
+        text = text.replace(/\x00P(IMG|LNK|SPAN|TAG|IFRAME|VIDEO|AUDIO|EXCALIDRAW)(\d+)\x00/g, function (match, type, index) {
             return protectedElements[parseInt(index)] || match;
         });
 
@@ -1364,6 +1541,14 @@ function parseMarkdown(text) {
             continue;
         }
 
+        let excalidrawMatch = line.match(/^\s*\x00PEXCALIDRAW(\d+)\x00\s*$/);
+        if (excalidrawMatch) {
+            flushParagraph();
+            let index = parseInt(excalidrawMatch[1], 10);
+            result.push(protectedElements[index] || line);
+            continue;
+        }
+
         // Check for math block placeholders
         if (line.match(/\x00MATHBLOCK\d+\x00/)) {
             flushParagraph();
@@ -1415,6 +1600,7 @@ function parseMarkdown(text) {
                 let nextLine = lines[nextNonEmptyIndex];
                 isNextBlockElement = (
                     /^\s*```/.test(nextLine) ||                      // Code block fence
+                    /^\s*\x00PEXCALIDRAW\d+\x00\s*$/.test(nextLine) || // Excalidraw block placeholder
                     /\x00MATHBLOCK\d+\x00/.test(nextLine) ||        // Math block placeholder
                     /^\x00PTAG\d+\x00/.test(nextLine) ||            // Protected HTML tags
                     /^#{1,6}\s+/.test(nextLine) ||                   // Headers
@@ -2017,7 +2203,7 @@ function initializeMarkdownNote(noteId) {
     var editorDiv = document.createElement('div');
     editorDiv.className = 'markdown-editor';
     editorDiv.contentEditable = true;
-    editorDiv.textContent = markdownContent;
+    renderMarkdownEditorContent(editorDiv, markdownContent);
     var isMobileViewport = false;
     try {
         isMobileViewport = (window.matchMedia && window.matchMedia('(max-width: 800px)').matches);
@@ -2793,7 +2979,7 @@ function toggleMarkdownCheckbox(checkbox, lineNumber) {
 
     // Update the editor content
     var newContent = lines.join('\n');
-    editorDiv.textContent = newContent;
+    renderMarkdownEditorContent(editorDiv, newContent);
     noteEntry.setAttribute('data-markdown-content', newContent);
 
     // Mark the note as modified
@@ -2862,6 +3048,14 @@ function setupPreviewInteractivity(noteId) {
         }
     }
 
+    if (typeof reinitializeImageClickHandlers === 'function') {
+        try {
+            reinitializeImageClickHandlers();
+        } catch (e) {
+            console.error('Error reinitializing markdown preview image handlers:', e);
+        }
+    }
+
     var isInSplitMode = noteEntry.classList.contains('markdown-split-mode');
 
     // Setup checkbox click handlers
@@ -2920,6 +3114,7 @@ window.exitSplitMode = exitSplitMode;
 window.getMarkdownContent = getMarkdownContent;
 window.getMarkdownContentForNote = getMarkdownContentForNote;
 window.parseMarkdown = parseMarkdown;
+window.renderMarkdownEditorContent = renderMarkdownEditorContent;
 window.setupMarkdownEditorListeners = setupMarkdownEditorListeners;
 window.updateViewModeButton = updateViewModeButton;
 window.setupSplitModePreviewUpdate = setupSplitModePreviewUpdate;
