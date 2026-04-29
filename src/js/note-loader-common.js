@@ -875,8 +875,9 @@ function buildImageMenuHTML(img) {
         </div>
     `;
 
-    // Add Resize option only on desktop (not on mobile) and NOT for markdown notes
-    if (!isMobile && !isMarkdownNote) {
+    // Add Resize option only on desktop. Markdown preview images are supported when backed by source syntax.
+    const canResizeImage = !isMobile && (!isMarkdownNote || img.hasAttribute('data-markdown-image-index'));
+    if (canResizeImage) {
         menuHTML += `
         <div class="image-menu-item" data-action="resize">
             <i class="lucide-maximize"></i>
@@ -1665,18 +1666,29 @@ function toggleSourceBackedMarkdownImageBorder(img, borderClass) {
     }
 
     if (typeof window.toggleMarkdownImageBorder === 'function') {
-
-    /**
-     * Toggle a 1px gray border around an image
-     */
-        window.toggleMarkdownImageBorder(img, borderClass);
-    } else {
-        console.warn('Markdown image border toggle is not available.');
+        return window.toggleMarkdownImageBorder(img, borderClass);
     }
 
-    return true;
+    console.warn('Markdown image border toggle is not available.');
+    return false;
 }
 
+function resizeSourceBackedMarkdownImage(img, width) {
+    if (!isSourceBackedMarkdownImage(img)) {
+        return false;
+    }
+
+    if (typeof window.resizeMarkdownImage === 'function') {
+        return window.resizeMarkdownImage(img, width);
+    }
+
+    console.warn('Markdown image resize is not available.');
+    return false;
+}
+
+/**
+ * Toggle a 1px gray border around an image
+ */
 function toggleImageBorder(img) {
     if (!img) return;
 
@@ -2072,6 +2084,10 @@ function enableImageResize(img) {
         if (img.style.display === 'inline-block' && !img.getAttribute('style').includes('display: inline-block')) {
             // Only revert display if we added it and it's not in the inline style attribute already
             // Actually, keeping inline-block is usually safer for resized images.
+        }
+
+        if (resizeSourceBackedMarkdownImage(img, finalWidth)) {
+            return;
         }
 
         // Trigger note save and modification indicator

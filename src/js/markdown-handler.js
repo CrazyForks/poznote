@@ -16,7 +16,7 @@ function _mdEscapeHtmlAttribute(str) {
 }
 
 function _mdGetMarkdownImageRegex() {
-    return /!\[([^\]]*)\]\(([^\s\)]+)(?:\s+"([^"]+)")?\)(?:\{((?=[^}]*\.img-with-border(?:-no-padding)?(?=\s|}))[^}]*)\})?/g;
+    return /!\[([^\]]*)\]\(([^\s\)]+)(?:\s+"([^"]+)")?\)(?:\{((?=[^}]*(?:\.img-with-border(?:-no-padding)?(?=\s|})|\bwidth\s*=))[^}]*)\})?/g;
 }
 
 function _mdNormalizeMarkdownImageBorderClass(borderClass) {
@@ -34,25 +34,78 @@ function _mdGetMarkdownImageBorderClass(attrBlock) {
     return '';
 }
 
-function _mdSetMarkdownImageBorderClass(markdownImage, borderClass) {
-    var normalizedBorderClass = _mdNormalizeMarkdownImageBorderClass(borderClass);
+function _mdNormalizeMarkdownImageWidth(width) {
+    var parsedWidth = parseInt(String(width || '').replace(/px$/i, ''), 10);
+    return isFinite(parsedWidth) && parsedWidth > 0 ? Math.round(parsedWidth) : null;
+}
+
+function _mdGetMarkdownImageWidth(attrBlock) {
+    var attrs = String(attrBlock || '');
+    var match = attrs.match(/(?:^|\s)width\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s]+))/i);
+    if (!match) {
+        return null;
+    }
+
+    return _mdNormalizeMarkdownImageWidth(match[1] || match[2] || match[3]);
+}
+
+function _mdGetMarkdownImageParts(markdownImage) {
     var match = String(markdownImage || '').match(/^([\s\S]*?\))(?:\{([^}]*)\})?$/);
     if (!match) {
+        return null;
+    }
+
+    return {
+        baseImage: match[1],
+        attrBlock: match[2] || ''
+    };
+}
+
+function _mdGetPassthroughMarkdownImageAttrTokens(attrBlock) {
+    var attrs = String(attrBlock || '')
+        .replace(/(?:^|\s)\.img-with-border(?:-no-padding)?(?=\s|$)/g, ' ')
+        .replace(/(?:^|\s)width\s*=\s*(?:"[^"]+"|'[^']+'|[^\s]+)/ig, ' ')
+        .trim();
+
+    return attrs ? attrs.split(/\s+/) : [];
+}
+
+function _mdBuildMarkdownImageWithAttrs(markdownImage, borderClass, width) {
+    var parts = _mdGetMarkdownImageParts(markdownImage);
+    if (!parts) {
         return markdownImage;
     }
 
-    var baseImage = match[1];
-    var attrBlock = match[2] || '';
-    var attrTokens = attrBlock.trim() ? attrBlock.trim().split(/\s+/) : [];
-    attrTokens = attrTokens.filter(function (token) {
-        return token !== '.img-with-border' && token !== '.img-with-border-no-padding';
-    });
+    var attrTokens = _mdGetPassthroughMarkdownImageAttrTokens(parts.attrBlock);
+    var normalizedBorderClass = _mdNormalizeMarkdownImageBorderClass(borderClass);
+    var normalizedWidth = _mdNormalizeMarkdownImageWidth(width);
 
     if (normalizedBorderClass) {
         attrTokens.push('.' + normalizedBorderClass);
     }
+    if (normalizedWidth) {
+        attrTokens.push('width=' + normalizedWidth);
+    }
 
-    return attrTokens.length ? baseImage + '{' + attrTokens.join(' ') + '}' : baseImage;
+    return attrTokens.length ? parts.baseImage + '{' + attrTokens.join(' ') + '}' : parts.baseImage;
+}
+
+function _mdSetMarkdownImageBorderClass(markdownImage, borderClass) {
+    var parts = _mdGetMarkdownImageParts(markdownImage);
+    if (!parts) {
+        return markdownImage;
+    }
+
+    return _mdBuildMarkdownImageWithAttrs(markdownImage, borderClass, _mdGetMarkdownImageWidth(parts.attrBlock));
+}
+
+function _mdSetMarkdownImageWidth(markdownImage, width) {
+    var parts = _mdGetMarkdownImageParts(markdownImage);
+    if (!parts) {
+        return markdownImage;
+    }
+
+    return _mdBuildMarkdownImageWithAttrs(markdownImage, _mdGetMarkdownImageBorderClass(parts.attrBlock), width);
 }
 
 function _mdGetIgnoredMarkdownImageRanges(content) {
@@ -104,6 +157,29 @@ function _mdUpdateMarkdownImageBorderAtIndex(content, targetImageIndex, borderCl
 
         if (renderedImageIndex === targetImageIndex) {
             var updatedImage = _mdSetMarkdownImageBorderClass(match[0], borderClass);
+            return rawContent.slice(0, match.index) + updatedImage + rawContent.slice(imageRegex.lastIndex);
+        }
+
+        renderedImageIndex++;
+    }
+
+    return null;
+}
+
+function _mdUpdateMarkdownImageWidthAtIndex(content, targetImageIndex, width) {
+    var rawContent = String(content || '');
+    var imageRegex = _mdGetMarkdownImageRegex();
+    var ignoredRanges = _mdGetIgnoredMarkdownImageRanges(rawContent);
+    var renderedImageIndex = 0;
+    var match;
+
+    while ((match = imageRegex.exec(rawContent)) !== null) {
+        if (_mdIsOffsetInRanges(match.index, ignoredRanges) || _mdIsEscapedMarkdownImage(rawContent, match.index)) {
+            continue;
+        }
+
+        if (renderedImageIndex === targetImageIndex) {
+            var updatedImage = _mdSetMarkdownImageWidth(match[0], width);
             return rawContent.slice(0, match.index) + updatedImage + rawContent.slice(imageRegex.lastIndex);
         }
 
@@ -1229,12 +1305,16 @@ function parseMarkdown(text) {
         let placeholder = '\x00PIMG' + protectedIndex + '\x00';
         let imageAttrs = ' src="' + escapeHtml(url) + '" alt="' + escapeHtml(alt) + '"';
         const borderClass = _mdGetMarkdownImageBorderClass(attrBlock);
+        const imageWidth = _mdGetMarkdownImageWidth(attrBlock);
 
         if (title) {
             imageAttrs += ' title="' + escapeHtml(title) + '"';
         }
         if (borderClass) {
             imageAttrs += ' class="' + borderClass + '"';
+        }
+        if (imageWidth) {
+            imageAttrs += ' width="' + imageWidth + '" style="width: ' + imageWidth + 'px;"';
         }
         imageAttrs += ' loading="lazy" decoding="async" data-markdown-image-index="' + markdownImageIndex + '"';
 
@@ -3098,6 +3178,56 @@ function toggleMarkdownImageBorder(img, borderClass) {
     return true;
 }
 
+function resizeMarkdownImage(img, width) {
+    var normalizedWidth = _mdNormalizeMarkdownImageWidth(width);
+    if (!img || !normalizedWidth) return false;
+
+    var noteEntry = img.closest('.noteentry');
+    if (!noteEntry) return false;
+
+    var noteId = noteEntry.id ? noteEntry.id.replace('entry', '') : null;
+    var imageIndex = parseInt(img.getAttribute('data-markdown-image-index'), 10);
+    if (!noteId || isNaN(imageIndex)) return false;
+
+    var editorDiv = noteEntry.querySelector('.markdown-editor');
+    var previewDiv = noteEntry.querySelector('.markdown-preview');
+    if (!editorDiv) return false;
+
+    var content = typeof getMarkdownContentForNote === 'function'
+        ? getMarkdownContentForNote(noteId)
+        : normalizeContentEditableText(editorDiv);
+    var newContent = _mdUpdateMarkdownImageWidthAtIndex(content, imageIndex, normalizedWidth);
+
+    if (newContent === null) {
+        console.warn('Could not find the markdown source image to resize.');
+        return false;
+    }
+
+    renderMarkdownEditorContent(editorDiv, newContent);
+    noteEntry.setAttribute('data-markdown-content', newContent);
+
+    if (previewDiv) {
+        renderMarkdownPreview(previewDiv, newContent, noteId, { delay: 50 });
+    }
+
+    if (typeof window.markNoteAsModified === 'function') {
+        window.markNoteAsModified();
+    }
+
+    if (typeof noteid !== 'undefined') {
+        noteid = noteId;
+    }
+    window.noteid = noteId;
+
+    setTimeout(function () {
+        if (typeof window.saveNoteImmediately === 'function') {
+            window.saveNoteImmediately();
+        }
+    }, 100);
+
+    return true;
+}
+
 /**
  * Toggle a markdown checkbox and update the source content
  * @param {HTMLInputElement} checkbox - The checkbox element that was clicked
@@ -3277,6 +3407,7 @@ window.setupMarkdownEditorListeners = setupMarkdownEditorListeners;
 window.updateViewModeButton = updateViewModeButton;
 window.setupSplitModePreviewUpdate = setupSplitModePreviewUpdate;
 window.toggleMarkdownImageBorder = toggleMarkdownImageBorder;
+window.resizeMarkdownImage = resizeMarkdownImage;
 window.toggleMarkdownCheckbox = toggleMarkdownCheckbox;
 window.navigateToEditorLine = navigateToEditorLine;
 window.setupPreviewInteractivity = setupPreviewInteractivity;
