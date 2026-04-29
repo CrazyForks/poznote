@@ -317,7 +317,7 @@
 }
 
 .calendar-note-open-btn {
-    background: #0b78e6;
+    background: #007DB8;
     color: #ffffff;
     border: none;
     padding: 6px 16px;
@@ -330,7 +330,7 @@
 }
 
 .calendar-note-open-btn:hover {
-    background: #0961c4;
+    background: #005a8a;
 }
 
 .calendar-notes-modal .modal-footer {
@@ -343,7 +343,7 @@
 }
 
 .calendar-notes-modal .btn-open-all {
-    background: #3b82f6;
+    background: #007DB8;
     color: #ffffff;
     border: none;
     padding: 8px 20px;
@@ -355,7 +355,7 @@
 }
 
 .calendar-notes-modal .btn-open-all:hover {
-    background: #2563eb;
+    background: #005a8a;
 }
 
 .calendar-notes-modal .btn-close-red {

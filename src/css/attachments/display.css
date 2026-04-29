@@ -153,12 +153,12 @@
 }
 
 .btn-view {
-    background: #2563eb;
+    background: #007DB8;
     color: white;
 }
 
 .btn-view:hover {
-    background: #1d4ed8;
+    background: #005a8a;
     transform: translateY(-1px);
 }
 
@@ -184,7 +184,7 @@
 
 /* Ensure action icon buttons keep their background/color */
 .btn-icon.btn-view {
-    background: #2563eb !important;
+    background: #007DB8 !important;
     color: #fff !important;
 }
 

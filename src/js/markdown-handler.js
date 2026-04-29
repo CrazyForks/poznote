@@ -189,6 +189,48 @@ function _mdUpdateMarkdownImageWidthAtIndex(content, targetImageIndex, width) {
     return null;
 }
 
+function _mdRemoveMarkdownImageMatch(rawContent, start, end) {
+    var lineStart = rawContent.lastIndexOf('\n', start - 1) + 1;
+    var nextLineBreak = rawContent.indexOf('\n', end);
+    var lineEnd = nextLineBreak === -1 ? rawContent.length : nextLineBreak;
+    var beforeOnLine = rawContent.slice(lineStart, start);
+    var afterOnLine = rawContent.slice(end, lineEnd);
+
+    if (/^[\t ]*$/.test(beforeOnLine) && /^[\t ]*$/.test(afterOnLine)) {
+        if (nextLineBreak !== -1) {
+            return rawContent.slice(0, lineStart) + rawContent.slice(nextLineBreak + 1);
+        }
+        if (lineStart > 0) {
+            return rawContent.slice(0, lineStart - 1);
+        }
+        return '';
+    }
+
+    return rawContent.slice(0, start) + rawContent.slice(end);
+}
+
+function _mdDeleteMarkdownImageAtIndex(content, targetImageIndex) {
+    var rawContent = String(content || '');
+    var imageRegex = _mdGetMarkdownImageRegex();
+    var ignoredRanges = _mdGetIgnoredMarkdownImageRanges(rawContent);
+    var renderedImageIndex = 0;
+    var match;
+
+    while ((match = imageRegex.exec(rawContent)) !== null) {
+        if (_mdIsOffsetInRanges(match.index, ignoredRanges) || _mdIsEscapedMarkdownImage(rawContent, match.index)) {
+            continue;
+        }
+
+        if (renderedImageIndex === targetImageIndex) {
+            return _mdRemoveMarkdownImageMatch(rawContent, match.index, imageRegex.lastIndex);
+        }
+
+        renderedImageIndex++;
+    }
+
+    return null;
+}
+
 function _mdNormalizeMermaidSourceForRendering(source) {
     return String(source || '')
         .replace(/\\n/g, '<br/>')
@@ -3126,6 +3168,47 @@ function toggleMarkdownModeSplit(noteId) {
     }
 }
 
+function persistMarkdownImageSourceChange(noteEntry, editorDiv, previewDiv, noteId, newContent) {
+    renderMarkdownEditorContent(editorDiv, newContent);
+    noteEntry.setAttribute('data-markdown-content', newContent);
+
+    if (typeof noteid !== 'undefined') {
+        noteid = noteId;
+    }
+    window.noteid = noteId;
+
+    try {
+        localStorage.setItem('poznote_draft_' + noteId, newContent);
+
+        var titleInput = document.getElementById('inp' + noteId);
+        var tagsElem = document.getElementById('tags' + noteId);
+        if (titleInput) {
+            localStorage.setItem('poznote_title_' + noteId, titleInput.value);
+        }
+        if (tagsElem) {
+            localStorage.setItem('poznote_tags_' + noteId, tagsElem.value);
+        }
+    } catch (e) {
+        console.warn('Could not persist markdown image change draft:', e);
+    }
+
+    if (previewDiv) {
+        renderMarkdownPreview(previewDiv, newContent, noteId, { delay: 50 });
+    }
+
+    if (typeof window.markNoteAsModified === 'function') {
+        window.markNoteAsModified();
+    }
+
+    setTimeout(function () {
+        if (typeof window.saveNoteToServer === 'function') {
+            window.saveNoteToServer();
+        } else if (typeof window.saveNoteImmediately === 'function') {
+            window.saveNoteImmediately();
+        }
+    }, 500);
+}
+
 function toggleMarkdownImageBorder(img, borderClass) {
     var normalizedBorderClass = _mdNormalizeMarkdownImageBorderClass(borderClass);
     if (!img || !normalizedBorderClass) return false;
@@ -3153,27 +3236,7 @@ function toggleMarkdownImageBorder(img, borderClass) {
         return false;
     }
 
-    renderMarkdownEditorContent(editorDiv, newContent);
-    noteEntry.setAttribute('data-markdown-content', newContent);
-
-    if (previewDiv) {
-        renderMarkdownPreview(previewDiv, newContent, noteId, { delay: 50 });
-    }
-
-    if (typeof window.markNoteAsModified === 'function') {
-        window.markNoteAsModified();
-    }
-
-    if (typeof noteid !== 'undefined') {
-        noteid = noteId;
-    }
-    window.noteid = noteId;
-
-    setTimeout(function () {
-        if (typeof window.saveNoteImmediately === 'function') {
-            window.saveNoteImmediately();
-        }
-    }, 100);
+    persistMarkdownImageSourceChange(noteEntry, editorDiv, previewDiv, noteId, newContent);
 
     return true;
 }
@@ -3203,27 +3266,36 @@ function resizeMarkdownImage(img, width) {
         return false;
     }
 
-    renderMarkdownEditorContent(editorDiv, newContent);
-    noteEntry.setAttribute('data-markdown-content', newContent);
+    persistMarkdownImageSourceChange(noteEntry, editorDiv, previewDiv, noteId, newContent);
 
-    if (previewDiv) {
-        renderMarkdownPreview(previewDiv, newContent, noteId, { delay: 50 });
+    return true;
+}
+
+function deleteMarkdownImage(img) {
+    if (!img) return false;
+
+    var noteEntry = img.closest('.noteentry');
+    if (!noteEntry) return false;
+
+    var noteId = noteEntry.id ? noteEntry.id.replace('entry', '') : null;
+    var imageIndex = parseInt(img.getAttribute('data-markdown-image-index'), 10);
+    if (!noteId || isNaN(imageIndex)) return false;
+
+    var editorDiv = noteEntry.querySelector('.markdown-editor');
+    var previewDiv = noteEntry.querySelector('.markdown-preview');
+    if (!editorDiv) return false;
+
+    var content = typeof getMarkdownContentForNote === 'function'
+        ? getMarkdownContentForNote(noteId)
+        : normalizeContentEditableText(editorDiv);
+    var newContent = _mdDeleteMarkdownImageAtIndex(content, imageIndex);
+
+    if (newContent === null) {
+        console.warn('Could not find the markdown source image to delete.');
+        return false;
     }
 
-    if (typeof window.markNoteAsModified === 'function') {
-        window.markNoteAsModified();
-    }
-
-    if (typeof noteid !== 'undefined') {
-        noteid = noteId;
-    }
-    window.noteid = noteId;
-
-    setTimeout(function () {
-        if (typeof window.saveNoteImmediately === 'function') {
-            window.saveNoteImmediately();
-        }
-    }, 100);
+    persistMarkdownImageSourceChange(noteEntry, editorDiv, previewDiv, noteId, newContent);
 
     return true;
 }
@@ -3408,6 +3480,7 @@ window.updateViewModeButton = updateViewModeButton;
 window.setupSplitModePreviewUpdate = setupSplitModePreviewUpdate;
 window.toggleMarkdownImageBorder = toggleMarkdownImageBorder;
 window.resizeMarkdownImage = resizeMarkdownImage;
+window.deleteMarkdownImage = deleteMarkdownImage;
 window.toggleMarkdownCheckbox = toggleMarkdownCheckbox;
 window.navigateToEditorLine = navigateToEditorLine;
 window.setupPreviewInteractivity = setupPreviewInteractivity;

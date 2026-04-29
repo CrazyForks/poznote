@@ -147,24 +147,24 @@ body.dark-mode .calendar-note-title {
 
 :root[data-theme='dark'] .calendar-note-open-btn,
 body.dark-mode .calendar-note-open-btn {
-    background: var(--dm-accent, #4a9eff);
+    background: #007DB8;
     color: #ffffff;
 }
 
 :root[data-theme='dark'] .calendar-note-open-btn:hover,
 body.dark-mode .calendar-note-open-btn:hover {
-    background: #3a8eef;
+    background: #005a8a;
 }
 
 :root[data-theme='dark'] .calendar-notes-modal .btn-open-all,
 body.dark-mode .calendar-notes-modal .btn-open-all {
-    background: #60a5fa;
-    color: #1e293b;
+    background: #007DB8;
+    color: #ffffff;
 }
 
 :root[data-theme='dark'] .calendar-notes-modal .btn-open-all:hover,
 body.dark-mode .calendar-notes-modal .btn-open-all:hover {
-    background: #93c5fd;
+    background: #005a8a;
 }
 
 :root[data-theme='dark'] .calendar-notes-modal .btn-close-red,

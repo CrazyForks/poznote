@@ -969,8 +969,9 @@ function buildImageMenuHTML(img) {
         `;
     }
 
-    // Add Delete option at the end only for non-markdown notes.
-    if (!isMarkdownNote) {
+    // Add Delete option at the end for HTML images and rendered Markdown images backed by source syntax.
+    const canDeleteImage = !isMarkdownNote || img.hasAttribute('data-markdown-image-index');
+    if (canDeleteImage) {
         menuHTML += `
             <div class="image-menu-item" data-action="delete-image" style="color: #dc3545;">
                 <i class="lucide lucide-trash-2"></i>
@@ -1587,42 +1588,18 @@ function performImageDeletion(img) {
         // Mark image as manually deleted to avoid double deletion from observer
         img._manuallyDeleted = true;
 
-        // Try to find attachment ID from src to delete it from server
-        const src = img.getAttribute('src');
-        if (src) {
-            // Match /api/v1/notes/{id}/attachments/{attachmentId}
-            const attachmentMatch = src.match(/\/api\/v1\/notes\/(\d+)\/attachments\/([a-fA-F0-9_-]+)/);
-            if (attachmentMatch) {
-                const noteId = attachmentMatch[1];
-                const attachmentId = attachmentMatch[2];
+        if (isSourceBackedMarkdownImage(img)) {
+            const markdownNoteEntry = img.closest('.noteentry');
+            const markdownNoteIdMatch = markdownNoteEntry?.id.match(/entry(\d+)/);
+            const markdownNoteId = markdownNoteIdMatch ? markdownNoteIdMatch[1] : null;
 
-                // Only delete if the image belongs to the note it's being deleted from
-                const noteEntry = img.closest('.noteentry');
-                const noteIdMatch = noteEntry?.id.match(/entry(\d+)/);
-                const activeNoteId = noteIdMatch ? noteIdMatch[1] : null;
-
-                if (activeNoteId && noteId === activeNoteId) {
-                    // Call API if possible
-                    if (typeof window.deleteAttachment === 'function') {
-                        // Temporarily set currentNoteIdForAttachments if needed
-                        const oldNoteId = window.currentNoteIdForAttachments;
-                        window.currentNoteIdForAttachments = noteId;
-                        window.deleteAttachment(attachmentId);
-                        window.currentNoteIdForAttachments = oldNoteId;
-                    } else {
-                        // Direct fetch as fallback
-                        const formData = new FormData();
-                        formData.append('action', 'delete');
-                        formData.append('note_id', noteId);
-                        formData.append('attachment_id', attachmentId);
-                        if (typeof window.selectedWorkspace !== 'undefined' && window.selectedWorkspace) {
-                            formData.append('workspace', window.selectedWorkspace);
-                        }
-                        fetch('/api/v1/notes/' + noteId + '/attachments', { method: 'POST', body: formData });
-                    }
-                }
+            if (deleteSourceBackedMarkdownImage(img)) {
+                deleteImageAttachmentIfOwnedByNote(img, markdownNoteId);
             }
+            return;
         }
+
+        deleteImageAttachmentIfOwnedByNote(img);
 
         // Find the container (could be excalidraw-container or just the img itself)
         const container = img.closest('.excalidraw-container');
@@ -1656,6 +1633,39 @@ function performImageDeletion(img) {
     }
 }
 
+function deleteImageAttachmentIfOwnedByNote(img, expectedNoteId) {
+    const src = img ? img.getAttribute('src') : '';
+    if (!src) return;
+
+    const attachmentMatch = src.match(/\/api\/v1\/notes\/(\d+)\/attachments\/([a-fA-F0-9_-]+)/);
+    if (!attachmentMatch) return;
+
+    const noteId = attachmentMatch[1];
+    const attachmentId = attachmentMatch[2];
+    const noteEntry = img.closest('.noteentry');
+    const noteIdMatch = noteEntry?.id.match(/entry(\d+)/);
+    const activeNoteId = expectedNoteId || (noteIdMatch ? noteIdMatch[1] : null);
+
+    if (!activeNoteId || noteId !== activeNoteId) return;
+
+    if (typeof window.deleteAttachment === 'function') {
+        const oldNoteId = window.currentNoteIdForAttachments;
+        window.currentNoteIdForAttachments = noteId;
+        window.deleteAttachment(attachmentId);
+        window.currentNoteIdForAttachments = oldNoteId;
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('action', 'delete');
+    formData.append('note_id', noteId);
+    formData.append('attachment_id', attachmentId);
+    if (typeof window.selectedWorkspace !== 'undefined' && window.selectedWorkspace) {
+        formData.append('workspace', window.selectedWorkspace);
+    }
+    fetch('/api/v1/notes/' + noteId + '/attachments', { method: 'POST', body: formData });
+}
+
 function isSourceBackedMarkdownImage(img) {
     return !!(img && img.closest('.markdown-preview') && img.hasAttribute('data-markdown-image-index'));
 }
@@ -1683,6 +1693,19 @@ function resizeSourceBackedMarkdownImage(img, width) {
     }
 
     console.warn('Markdown image resize is not available.');
+    return false;
+}
+
+function deleteSourceBackedMarkdownImage(img) {
+    if (!isSourceBackedMarkdownImage(img)) {
+        return false;
+    }
+
+    if (typeof window.deleteMarkdownImage === 'function') {
+        return window.deleteMarkdownImage(img);
+    }
+
+    console.warn('Markdown image delete is not available.');
     return false;
 }
 
