@@ -787,6 +787,31 @@ function importSingleNoteFile($con, $content, $fileName, $fileExtension, $worksp
     return ['success' => true, 'noteId' => (int)$noteId, 'noteType' => $noteType, 'content' => $content, 'title' => $title];
 }
 
+function addImportedPoznoteAttachmentToNote(&$noteAttachments, $imageInfo) {
+    if (empty($imageInfo['unique_filename'])) {
+        return null;
+    }
+
+    foreach ($noteAttachments as $attachment) {
+        if (($attachment['filename'] ?? null) === $imageInfo['unique_filename']) {
+            return $attachment['id'] ?? null;
+        }
+    }
+
+    $extension = pathinfo($imageInfo['unique_filename'], PATHINFO_EXTENSION);
+    $attachmentId = uniqid();
+    $noteAttachments[] = [
+        'id' => $attachmentId,
+        'filename' => $imageInfo['unique_filename'],
+        'original_filename' => 'attachment' . ($extension ? '.' . $extension : ''),
+        'file_size' => $imageInfo['file_size'] ?? 0,
+        'file_type' => $imageInfo['file_type'] ?? 'application/octet-stream',
+        'uploaded_at' => date('Y-m-d H:i:s')
+    ];
+
+    return $attachmentId;
+}
+
 function importNotesZip($uploadedFile) {
     global $con;
     
@@ -1251,7 +1276,7 @@ function importIndividualNotesZip($uploadedFile, $workspace = null, $folder = nu
         }
         
         // Check if this is from an attachments/ folder (Poznote export)
-        if (preg_match('#^attachments/([a-zA-Z0-9_]+)\.#', $fileName, $matches)) {
+        if (preg_match('#(?:^|/)attachments/([a-zA-Z0-9_-]+)\.#', $fileName, $matches)) {
             $attachmentId = $matches[1];
             
             // Generate unique filename for storage
@@ -1398,7 +1423,8 @@ function importIndividualNotesZip($uploadedFile, $workspace = null, $folder = nu
             // Process Obsidian-style image references ![[image.png]] and convert to standard markdown
             // Also build the attachments array for this note
             $noteAttachments = [];
-            if ($noteType === 'markdown' && !empty($importedImages)) {
+            if ($noteType === 'markdown' && (!empty($importedImages) || !empty($attachmentIdMap))) {
+                if (!empty($importedImages)) {
                 // Match Obsidian wikilink image syntax: ![[filename.ext]] or ![[filename.ext|alt text]]
                 $content = preg_replace_callback('/!\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/', function($matches) use ($noteId, $importedImages, &$noteAttachments) {
                     $imageName = trim($matches[1]);
@@ -1489,37 +1515,19 @@ function importIndividualNotesZip($uploadedFile, $workspace = null, $folder = nu
                     // Image not found, keep original
                     return $matches[0];
                 }, $content);
+                }
                 
                 // Handle Poznote-exported markdown images: (../)attachments/{attachmentId}.ext
                 if (!empty($attachmentIdMap)) {
-                    $content = preg_replace_callback('/!\[([^\]]*)\]\((?:\.\.\/|\.\/|\/)*attachments\/([a-zA-Z0-9_]+)(?:\.[^)]+)?\)/i', function($matches) use ($noteId, $attachmentIdMap, &$noteAttachments) {
+                    $content = preg_replace_callback('/!\[([^\]]*)\]\((?:\.\.\/|\.\/|\/)*attachments\/([a-zA-Z0-9_-]+)(?:\.[^)]+)?\)/i', function($matches) use ($noteId, $attachmentIdMap, &$noteAttachments) {
                         $altText = $matches[1];
                         $oldAttachmentId = $matches[2];
                         
                         if (isset($attachmentIdMap[$oldAttachmentId])) {
                             $imageInfo = $attachmentIdMap[$oldAttachmentId];
-                            
-                            // Add to note's attachments with a new ID if not already added
-                            $alreadyAdded = false;
-                            $newAttachmentId = null;
-                            foreach ($noteAttachments as $att) {
-                                if ($att['filename'] === $imageInfo['unique_filename']) {
-                                    $alreadyAdded = true;
-                                    $newAttachmentId = $att['id'];
-                                    break;
-                                }
-                            }
-                            
-                            if (!$alreadyAdded) {
-                                $newAttachmentId = uniqid();
-                                $noteAttachments[] = [
-                                    'id' => $newAttachmentId,
-                                    'filename' => $imageInfo['unique_filename'],
-                                    'original_filename' => 'attachment.' . pathinfo($imageInfo['unique_filename'], PATHINFO_EXTENSION),
-                                    'file_size' => $imageInfo['file_size'],
-                                    'file_type' => $imageInfo['file_type'],
-                                    'uploaded_at' => date('Y-m-d H:i:s')
-                                ];
+                            $newAttachmentId = addImportedPoznoteAttachmentToNote($noteAttachments, $imageInfo);
+                            if ($newAttachmentId === null) {
+                                return $matches[0];
                             }
                             
                             // Convert to API path
@@ -1527,6 +1535,25 @@ function importIndividualNotesZip($uploadedFile, $workspace = null, $folder = nu
                         }
                         
                         // Attachment not found, keep original
+                        return $matches[0];
+                    }, $content);
+
+                    // Markdown notes can contain raw HTML blocks (notably Excalidraw containers).
+                    $content = preg_replace_callback('#(src|href)=(["\']?)(?:\.\.\/|\.\/|\/)*attachments/([a-zA-Z0-9_-]+)(?:\.[^"\'>\s]+)?\2#i', function($matches) use ($noteId, $attachmentIdMap, &$noteAttachments) {
+                        $attr = $matches[1];
+                        $quote = $matches[2];
+                        $oldAttachmentId = $matches[3];
+
+                        if (isset($attachmentIdMap[$oldAttachmentId])) {
+                            $imageInfo = $attachmentIdMap[$oldAttachmentId];
+                            $newAttachmentId = addImportedPoznoteAttachmentToNote($noteAttachments, $imageInfo);
+                            if ($newAttachmentId === null) {
+                                return $matches[0];
+                            }
+
+                            return $attr . '=' . $quote . '/api/v1/notes/' . $noteId . '/attachments/' . $newAttachmentId . $quote;
+                        }
+
                         return $matches[0];
                     }, $content);
                 }
@@ -1539,7 +1566,7 @@ function importIndividualNotesZip($uploadedFile, $workspace = null, $folder = nu
                 }
             } else if ($noteType === 'note' && !empty($attachmentIdMap)) {
                 // For HTML notes, handle Poznote-exported attachments: (../)attachments/{attachmentId}.ext
-                $content = preg_replace_callback('#(src|href)=(["\']?)(?:\.\.\/|\.\/|\/)*attachments/([a-zA-Z0-9_]+)(?:\.[^"\'>\s]+)?\2#i', function($matches) use ($noteId, $attachmentIdMap, &$noteAttachments) {
+                $content = preg_replace_callback('#(src|href)=(["\']?)(?:\.\.\/|\.\/|\/)*attachments/([a-zA-Z0-9_-]+)(?:\.[^"\'>\s]+)?\2#i', function($matches) use ($noteId, $attachmentIdMap, &$noteAttachments) {
                     $attr = $matches[1];
                     $quote = $matches[2];
                     $oldAttachmentId = $matches[3];
@@ -1547,27 +1574,9 @@ function importIndividualNotesZip($uploadedFile, $workspace = null, $folder = nu
                     if (isset($attachmentIdMap[$oldAttachmentId])) {
                         $imageInfo = $attachmentIdMap[$oldAttachmentId];
                         
-                        // Add to note's attachments with a new ID if not already added
-                        $alreadyAdded = false;
-                        $newAttachmentId = null;
-                        foreach ($noteAttachments as $att) {
-                            if ($att['filename'] === $imageInfo['unique_filename']) {
-                                $alreadyAdded = true;
-                                $newAttachmentId = $att['id'];
-                                break;
-                            }
-                        }
-                        
-                        if (!$alreadyAdded) {
-                            $newAttachmentId = uniqid();
-                            $noteAttachments[] = [
-                                'id' => $newAttachmentId,
-                                'filename' => $imageInfo['unique_filename'],
-                                'original_filename' => 'attachment.' . pathinfo($imageInfo['unique_filename'], PATHINFO_EXTENSION),
-                                'file_size' => $imageInfo['file_size'],
-                                'file_type' => $imageInfo['file_type'],
-                                'uploaded_at' => date('Y-m-d H:i:s')
-                            ];
+                        $newAttachmentId = addImportedPoznoteAttachmentToNote($noteAttachments, $imageInfo);
+                        if ($newAttachmentId === null) {
+                            return $matches[0];
                         }
                         
                         // Return full src/href attribute with API URL

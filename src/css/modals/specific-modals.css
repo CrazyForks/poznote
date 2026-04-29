@@ -694,13 +694,14 @@
 }
 
 #deleteConfirmModal .btn-cancel {
-    background-color: #e04b4b !important;
+    background-color: #6c757d !important;
     color: #fff !important;
-    border: none !important;
+    border: 1px solid #6c757d !important;
 }
 
 #deleteConfirmModal .btn-cancel:hover {
-    background-color: #c43b3b !important;
+    background-color: #5a6268 !important;
+    border-color: #545b62 !important;
 }
 
 #deleteConfirmModal .btn-danger {
@@ -726,13 +727,14 @@
 }
 
 #emptyTrashConfirmModal .btn-cancel {
-    background-color: #e04b4b !important;
+    background-color: #6c757d !important;
     color: #fff !important;
-    border: none !important;
+    border: 1px solid #6c757d !important;
 }
 
 #emptyTrashConfirmModal .btn-cancel:hover {
-    background-color: #c43b3b !important;
+    background-color: #5a6268 !important;
+    border-color: #545b62 !important;
 }
 
 #emptyTrashConfirmModal .btn-danger {
