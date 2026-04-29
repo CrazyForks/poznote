@@ -951,8 +951,9 @@ function buildImageMenuHTML(img) {
         `;
     }
 
-    // Add border toggle and delete options only for non-markdown notes
-    if (!isMarkdownNote) {
+    // Add border toggles for HTML images and rendered Markdown images backed by source syntax.
+    const canToggleBorder = !isMarkdownNote || img.hasAttribute('data-markdown-image-index');
+    if (canToggleBorder) {
         const hasBorder = img.classList.contains('img-with-border');
         const hasBorderNoPadding = img.classList.contains('img-with-border-no-padding');
         menuHTML += `
@@ -965,8 +966,10 @@ function buildImageMenuHTML(img) {
                 ${hasBorderNoPadding ? t('image_menu.remove_border_no_padding', null, 'Remove Border without padding') : t('image_menu.add_border_no_padding', null, 'Add Border without padding')}
             </div>
         `;
+    }
 
-        // Add Delete option at the end
+    // Add Delete option at the end only for non-markdown notes.
+    if (!isMarkdownNote) {
         menuHTML += `
             <div class="image-menu-item" data-action="delete-image" style="color: #dc3545;">
                 <i class="lucide lucide-trash-2"></i>
@@ -1652,13 +1655,36 @@ function performImageDeletion(img) {
     }
 }
 
-/**
- * Toggle a 1px gray border around an image
- */
+function isSourceBackedMarkdownImage(img) {
+    return !!(img && img.closest('.markdown-preview') && img.hasAttribute('data-markdown-image-index'));
+}
+
+function toggleSourceBackedMarkdownImageBorder(img, borderClass) {
+    if (!isSourceBackedMarkdownImage(img)) {
+        return false;
+    }
+
+    if (typeof window.toggleMarkdownImageBorder === 'function') {
+
+    /**
+     * Toggle a 1px gray border around an image
+     */
+        window.toggleMarkdownImageBorder(img, borderClass);
+    } else {
+        console.warn('Markdown image border toggle is not available.');
+    }
+
+    return true;
+}
+
 function toggleImageBorder(img) {
     if (!img) return;
 
     try {
+        if (toggleSourceBackedMarkdownImageBorder(img, 'img-with-border')) {
+            return;
+        }
+
         // Check if image currently has the border class
         const hasBorderClass = img.classList.contains('img-with-border');
 
@@ -1696,6 +1722,10 @@ function toggleImageBorderNoPadding(img) {
     if (!img) return;
 
     try {
+        if (toggleSourceBackedMarkdownImageBorder(img, 'img-with-border-no-padding')) {
+            return;
+        }
+
         // Check if image currently has the no-padding border class
         const hasBorderClass = img.classList.contains('img-with-border-no-padding');
 

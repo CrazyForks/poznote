@@ -15,6 +15,104 @@ function _mdEscapeHtmlAttribute(str) {
     return _mdEscapeHtml(str).replace(/\r\n|\r|\n/g, '&#10;');
 }
 
+function _mdGetMarkdownImageRegex() {
+    return /!\[([^\]]*)\]\(([^\s\)]+)(?:\s+"([^"]+)")?\)(?:\{((?=[^}]*\.img-with-border(?:-no-padding)?(?=\s|}))[^}]*)\})?/g;
+}
+
+function _mdNormalizeMarkdownImageBorderClass(borderClass) {
+    return ['img-with-border', 'img-with-border-no-padding'].indexOf(borderClass) !== -1 ? borderClass : '';
+}
+
+function _mdGetMarkdownImageBorderClass(attrBlock) {
+    var attrs = String(attrBlock || '');
+    if (/(^|\s)\.img-with-border-no-padding(?=\s|$)/.test(attrs)) {
+        return 'img-with-border-no-padding';
+    }
+    if (/(^|\s)\.img-with-border(?=\s|$)/.test(attrs)) {
+        return 'img-with-border';
+    }
+    return '';
+}
+
+function _mdSetMarkdownImageBorderClass(markdownImage, borderClass) {
+    var normalizedBorderClass = _mdNormalizeMarkdownImageBorderClass(borderClass);
+    var match = String(markdownImage || '').match(/^([\s\S]*?\))(?:\{([^}]*)\})?$/);
+    if (!match) {
+        return markdownImage;
+    }
+
+    var baseImage = match[1];
+    var attrBlock = match[2] || '';
+    var attrTokens = attrBlock.trim() ? attrBlock.trim().split(/\s+/) : [];
+    attrTokens = attrTokens.filter(function (token) {
+        return token !== '.img-with-border' && token !== '.img-with-border-no-padding';
+    });
+
+    if (normalizedBorderClass) {
+        attrTokens.push('.' + normalizedBorderClass);
+    }
+
+    return attrTokens.length ? baseImage + '{' + attrTokens.join(' ') + '}' : baseImage;
+}
+
+function _mdGetIgnoredMarkdownImageRanges(content) {
+    var ranges = [];
+    var rawContent = String(content || '');
+    var fencedRegex = /(?:^|\n)(\s*```[^\n]*\n[\s\S]*?\n\s*```)(?=\n|$)/g;
+    var inlineCodeRegex = /(?<!\\)`([^`\n]+?)(?<!\\)`/g;
+    var match;
+
+    while ((match = fencedRegex.exec(rawContent)) !== null) {
+        ranges.push({ start: match.index, end: fencedRegex.lastIndex });
+    }
+
+    while ((match = inlineCodeRegex.exec(rawContent)) !== null) {
+        ranges.push({ start: match.index, end: inlineCodeRegex.lastIndex });
+    }
+
+    return ranges;
+}
+
+function _mdIsOffsetInRanges(offset, ranges) {
+    for (var i = 0; i < ranges.length; i++) {
+        if (offset >= ranges[i].start && offset < ranges[i].end) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function _mdIsEscapedMarkdownImage(content, offset) {
+    var slashCount = 0;
+    for (var i = offset - 1; i >= 0 && content.charAt(i) === '\\'; i--) {
+        slashCount++;
+    }
+    return slashCount % 2 === 1;
+}
+
+function _mdUpdateMarkdownImageBorderAtIndex(content, targetImageIndex, borderClass) {
+    var rawContent = String(content || '');
+    var imageRegex = _mdGetMarkdownImageRegex();
+    var ignoredRanges = _mdGetIgnoredMarkdownImageRanges(rawContent);
+    var renderedImageIndex = 0;
+    var match;
+
+    while ((match = imageRegex.exec(rawContent)) !== null) {
+        if (_mdIsOffsetInRanges(match.index, ignoredRanges) || _mdIsEscapedMarkdownImage(rawContent, match.index)) {
+            continue;
+        }
+
+        if (renderedImageIndex === targetImageIndex) {
+            var updatedImage = _mdSetMarkdownImageBorderClass(match[0], borderClass);
+            return rawContent.slice(0, match.index) + updatedImage + rawContent.slice(imageRegex.lastIndex);
+        }
+
+        renderedImageIndex++;
+    }
+
+    return null;
+}
+
 function _mdNormalizeMermaidSourceForRendering(source) {
     return String(source || '')
         .replace(/\\n/g, '<br/>')
@@ -1124,17 +1222,25 @@ function parseMarkdown(text) {
     let protectedElements = [];
     let protectedIndex = 0;
 
-    // Protect images first ![alt](url "title")
-    text = text.replace(/!\[([^\]]*)\]\(([^\s\)]+)(?:\s+"([^"]+)")?\)/g, function (match, alt, url, title) {
+    let markdownImageIndex = 0;
+
+    // Protect images first ![alt](url "title") with optional {.img-with-border} attributes
+    text = text.replace(_mdGetMarkdownImageRegex(), function (match, alt, url, title, attrBlock) {
         let placeholder = '\x00PIMG' + protectedIndex + '\x00';
-        let imgTag;
-        // Add lazy loading and async decoding for better performance with many images
+        let imageAttrs = ' src="' + escapeHtml(url) + '" alt="' + escapeHtml(alt) + '"';
+        const borderClass = _mdGetMarkdownImageBorderClass(attrBlock);
+
         if (title) {
-            imgTag = '<img src="' + url + '" alt="' + alt + '" title="' + title + '" loading="lazy" decoding="async">';
-        } else {
-            imgTag = '<img src="' + url + '" alt="' + alt + '" loading="lazy" decoding="async">';
+            imageAttrs += ' title="' + escapeHtml(title) + '"';
         }
+        if (borderClass) {
+            imageAttrs += ' class="' + borderClass + '"';
+        }
+        imageAttrs += ' loading="lazy" decoding="async" data-markdown-image-index="' + markdownImageIndex + '"';
+
+        let imgTag = '<img' + imageAttrs + '>';
         protectedElements[protectedIndex] = imgTag;
+        markdownImageIndex++;
         protectedIndex++;
         return placeholder;
     });
@@ -2940,6 +3046,58 @@ function toggleMarkdownModeSplit(noteId) {
     }
 }
 
+function toggleMarkdownImageBorder(img, borderClass) {
+    var normalizedBorderClass = _mdNormalizeMarkdownImageBorderClass(borderClass);
+    if (!img || !normalizedBorderClass) return false;
+
+    var noteEntry = img.closest('.noteentry');
+    if (!noteEntry) return false;
+
+    var noteId = noteEntry.id ? noteEntry.id.replace('entry', '') : null;
+    var imageIndex = parseInt(img.getAttribute('data-markdown-image-index'), 10);
+    if (!noteId || isNaN(imageIndex)) return false;
+
+    var editorDiv = noteEntry.querySelector('.markdown-editor');
+    var previewDiv = noteEntry.querySelector('.markdown-preview');
+    if (!editorDiv) return false;
+
+    var content = typeof getMarkdownContentForNote === 'function'
+        ? getMarkdownContentForNote(noteId)
+        : normalizeContentEditableText(editorDiv);
+    var currentBorderClass = img.classList.contains(normalizedBorderClass) ? normalizedBorderClass : '';
+    var nextBorderClass = currentBorderClass === normalizedBorderClass ? '' : normalizedBorderClass;
+    var newContent = _mdUpdateMarkdownImageBorderAtIndex(content, imageIndex, nextBorderClass);
+
+    if (newContent === null) {
+        console.warn('Could not find the markdown source image to update.');
+        return false;
+    }
+
+    renderMarkdownEditorContent(editorDiv, newContent);
+    noteEntry.setAttribute('data-markdown-content', newContent);
+
+    if (previewDiv) {
+        renderMarkdownPreview(previewDiv, newContent, noteId, { delay: 50 });
+    }
+
+    if (typeof window.markNoteAsModified === 'function') {
+        window.markNoteAsModified();
+    }
+
+    if (typeof noteid !== 'undefined') {
+        noteid = noteId;
+    }
+    window.noteid = noteId;
+
+    setTimeout(function () {
+        if (typeof window.saveNoteImmediately === 'function') {
+            window.saveNoteImmediately();
+        }
+    }, 100);
+
+    return true;
+}
+
 /**
  * Toggle a markdown checkbox and update the source content
  * @param {HTMLInputElement} checkbox - The checkbox element that was clicked
@@ -3118,6 +3276,7 @@ window.renderMarkdownEditorContent = renderMarkdownEditorContent;
 window.setupMarkdownEditorListeners = setupMarkdownEditorListeners;
 window.updateViewModeButton = updateViewModeButton;
 window.setupSplitModePreviewUpdate = setupSplitModePreviewUpdate;
+window.toggleMarkdownImageBorder = toggleMarkdownImageBorder;
 window.toggleMarkdownCheckbox = toggleMarkdownCheckbox;
 window.navigateToEditorLine = navigateToEditorLine;
 window.setupPreviewInteractivity = setupPreviewInteractivity;
