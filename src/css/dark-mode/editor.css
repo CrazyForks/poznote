@@ -141,6 +141,19 @@ body.dark-mode .code-block-delete-btn svg {
     stroke: currentColor !important;
 }
 
+html[data-theme='dark'] .code-block-delete-btn,
+html[data-theme='dark'] pre.code-block .code-block-delete-btn,
+html[data-theme='dark'] .noteentry pre .code-block-delete-btn,
+html[data-theme='dark'] .public-note .content pre .code-block-delete-btn,
+html[data-theme='dark'] .code-block-actions-host > .code-block-delete-btn,
+body.dark-mode .code-block-delete-btn,
+body.dark-mode pre.code-block .code-block-delete-btn,
+body.dark-mode .noteentry pre .code-block-delete-btn,
+body.dark-mode .public-note .content pre .code-block-delete-btn,
+body.dark-mode .code-block-actions-host > .code-block-delete-btn {
+    color: #f87171 !important;
+}
+
 html[data-theme='dark'] .code-block-copy-btn:hover,
 html[data-theme='dark'] pre.code-block .code-block-copy-btn:hover,
 html[data-theme='dark'] .noteentry pre .code-block-copy-btn:hover,
@@ -156,6 +169,19 @@ body.dark-mode .code-block-actions-host > .code-block-delete-btn:hover {
     background: transparent !important;
     color: #ffffff !important;
     opacity: 1 !important;
+}
+
+html[data-theme='dark'] .code-block-delete-btn:hover,
+html[data-theme='dark'] pre.code-block .code-block-delete-btn:hover,
+html[data-theme='dark'] .noteentry pre .code-block-delete-btn:hover,
+html[data-theme='dark'] .public-note .content pre .code-block-delete-btn:hover,
+html[data-theme='dark'] .code-block-actions-host > .code-block-delete-btn:hover,
+body.dark-mode .code-block-delete-btn:hover,
+body.dark-mode pre.code-block .code-block-delete-btn:hover,
+body.dark-mode .noteentry pre .code-block-delete-btn:hover,
+body.dark-mode .public-note .content pre .code-block-delete-btn:hover,
+body.dark-mode .code-block-actions-host > .code-block-delete-btn:hover {
+    color: #ff6b6b !important;
 }
 
 html[data-theme='dark'] .code-block-copy-btn.copied,
