@@ -95,6 +95,22 @@ body.public-note-page {
     height: auto;
 }
 
+.public-note img.img-with-border {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 6px;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.public-note img.img-with-border-no-padding {
+    border: 1px solid #ddd;
+    border-radius: 0;
+    padding: 0 !important;
+    vertical-align: middle;
+    box-sizing: border-box;
+}
+
 .public-note video {
     max-width: 100%;
     height: auto;

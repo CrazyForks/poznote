@@ -312,6 +312,10 @@ body.dark-mode .create-section h4 {
     min-width: 160px;
     padding: 8px 0;
     display: block;
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 .image-menu-item {
@@ -357,6 +361,10 @@ body.dark-mode .create-section h4 {
     padding: 8px 0;
     z-index: 10001;
     display: none;
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 .image-submenu-item {

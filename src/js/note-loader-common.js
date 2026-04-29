@@ -860,6 +860,7 @@ function buildImageMenuHTML(img) {
     const isMarkdownNote = img.closest('.markdown-preview') !== null ||
         img.closest('.markdown-editor') !== null ||
         img.closest('.note-entry[data-note-format="markdown"]') !== null;
+    const isSourceBackedMarkdownPreviewImage = isSourceBackedMarkdownImage(img);
 
     // Helper function for translations
     const t = window.t || ((key, params, fallback) => fallback);
@@ -876,7 +877,7 @@ function buildImageMenuHTML(img) {
     `;
 
     // Add Resize option only on desktop. Markdown preview images are supported when backed by source syntax.
-    const canResizeImage = !isMobile && (!isMarkdownNote || img.hasAttribute('data-markdown-image-index'));
+    const canResizeImage = !isMobile && (!isMarkdownNote || isSourceBackedMarkdownPreviewImage);
     if (canResizeImage) {
         menuHTML += `
         <div class="image-menu-item" data-action="resize">
@@ -953,7 +954,7 @@ function buildImageMenuHTML(img) {
     }
 
     // Add border toggles for HTML images and rendered Markdown images backed by source syntax.
-    const canToggleBorder = !isMarkdownNote || img.hasAttribute('data-markdown-image-index');
+    const canToggleBorder = !isMarkdownNote || isSourceBackedMarkdownPreviewImage;
     if (canToggleBorder) {
         const hasBorder = img.classList.contains('img-with-border');
         const hasBorderNoPadding = img.classList.contains('img-with-border-no-padding');
@@ -970,7 +971,7 @@ function buildImageMenuHTML(img) {
     }
 
     // Add Delete option at the end for HTML images and rendered Markdown images backed by source syntax.
-    const canDeleteImage = !isMarkdownNote || img.hasAttribute('data-markdown-image-index');
+    const canDeleteImage = !isMarkdownNote || isSourceBackedMarkdownPreviewImage;
     if (canDeleteImage) {
         menuHTML += `
             <div class="image-menu-item" data-action="delete-image" style="color: #dc3545;">
@@ -1084,27 +1085,24 @@ function adjustImageMenuPosition(menu, clickX, clickY) {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const padding = 8;
+    const cursorOffset = 12;
 
-    // If menu goes off the right edge, move it left
-    if (menuRect.right > viewportWidth - padding) {
-        menu.style.left = (clickX - (menuRect.width / 2)) + 'px';
-        menu.style.transform = 'translate(0, -120%)';
+    let left = clickX - (menuRect.width / 2);
+    let top = clickY - menuRect.height - cursorOffset;
+
+    if (top < padding) {
+        top = clickY + cursorOffset;
     }
 
-    // If menu goes off the left edge, move it right
-    // Recalculate after potential right edge adjustment
-    const updatedMenuRect = menu.getBoundingClientRect();
-    if (updatedMenuRect.left < padding) {
-        // Position menu with padding from left edge
-        menu.style.left = (padding + menuRect.width / 2) + 'px';
-        menu.style.transform = 'translate(-50%, -120%)';
+    if (top + menuRect.height > viewportHeight - padding) {
+        top = Math.max(padding, viewportHeight - menuRect.height - padding);
     }
 
-    // If menu goes off the top edge, move it below the cursor
-    if (menuRect.top < padding) {
-        menu.style.top = clickY + 'px';
-        menu.style.transform = 'translate(-50%, 20%)';
-    }
+    left = Math.max(padding, Math.min(left, viewportWidth - menuRect.width - padding));
+
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    menu.style.transform = 'none';
 }
 
 /**
@@ -1621,12 +1619,11 @@ function performImageDeletion(img) {
             window.markNoteAsModified(); // Mark note as edited
         }
 
-        // Trigger automatic save after a short delay
-        setTimeout(function () {
-            if (typeof window.saveNoteImmediately === 'function') {
-                window.saveNoteImmediately(); // Save to server
-            }
-        }, 100);
+        if (typeof window.saveNoteImmediately === 'function') {
+            window.saveNoteImmediately(); // Save to server
+        } else if (typeof window.saveNoteToServer === 'function') {
+            window.saveNoteToServer();
+        }
 
     } catch (error) {
         console.warn('Error deleting image:', error);
@@ -1667,11 +1664,23 @@ function deleteImageAttachmentIfOwnedByNote(img, expectedNoteId) {
 }
 
 function isSourceBackedMarkdownImage(img) {
-    return !!(img && img.closest('.markdown-preview') && img.hasAttribute('data-markdown-image-index'));
+    return !!(img && img.closest('.markdown-preview') && (
+        img.hasAttribute('data-markdown-image-index') ||
+        !!img.closest('.excalidraw-container[data-markdown-excalidraw-index]')
+    ));
 }
 
 function toggleSourceBackedMarkdownImageBorder(img, borderClass) {
     if (!isSourceBackedMarkdownImage(img)) {
+        return false;
+    }
+
+    if (img.closest('.excalidraw-container[data-markdown-excalidraw-index]')) {
+        if (typeof window.toggleMarkdownExcalidrawImageBorder === 'function') {
+            return window.toggleMarkdownExcalidrawImageBorder(img, borderClass);
+        }
+
+        console.warn('Markdown Excalidraw image border toggle is not available.');
         return false;
     }
 
@@ -1688,6 +1697,15 @@ function resizeSourceBackedMarkdownImage(img, width) {
         return false;
     }
 
+    if (img.closest('.excalidraw-container[data-markdown-excalidraw-index]')) {
+        if (typeof window.resizeMarkdownExcalidrawImage === 'function') {
+            return window.resizeMarkdownExcalidrawImage(img, width);
+        }
+
+        console.warn('Markdown Excalidraw image resize is not available.');
+        return false;
+    }
+
     if (typeof window.resizeMarkdownImage === 'function') {
         return window.resizeMarkdownImage(img, width);
     }
@@ -1698,6 +1716,15 @@ function resizeSourceBackedMarkdownImage(img, width) {
 
 function deleteSourceBackedMarkdownImage(img) {
     if (!isSourceBackedMarkdownImage(img)) {
+        return false;
+    }
+
+    if (img.closest('.excalidraw-container[data-markdown-excalidraw-index]')) {
+        if (typeof window.deleteMarkdownExcalidrawImage === 'function') {
+            return window.deleteMarkdownExcalidrawImage(img);
+        }
+
+        console.warn('Markdown Excalidraw image delete is not available.');
         return false;
     }
 
@@ -1738,12 +1765,11 @@ function toggleImageBorder(img) {
             window.markNoteAsModified(); // Mark note as edited
         }
 
-        // Trigger automatic save after a short delay
-        setTimeout(function () {
-            if (typeof window.saveNoteImmediately === 'function') {
-                window.saveNoteImmediately(); // Save to server
-            }
-        }, 100);
+        if (typeof window.saveNoteImmediately === 'function') {
+            window.saveNoteImmediately(); // Save to server
+        } else if (typeof window.saveNoteToServer === 'function') {
+            window.saveNoteToServer();
+        }
 
     } catch (error) {
         console.warn('Error toggling image border:', error);
@@ -2118,11 +2144,11 @@ function enableImageResize(img) {
             window.markNoteAsModified();
         }
 
-        setTimeout(function () {
-            if (typeof window.saveNoteImmediately === 'function') {
-                window.saveNoteImmediately();
-            }
-        }, 100);
+        if (typeof window.saveNoteImmediately === 'function') {
+            window.saveNoteImmediately();
+        } else if (typeof window.saveNoteToServer === 'function') {
+            window.saveNoteToServer();
+        }
     });
 
     // Click outside to remove handle
