@@ -432,7 +432,7 @@ function updateAttachmentCountInMenu(noteId) {
                     }
                 }
 
-                var hasVisibleAttachments = visibleLinksCount > 0;
+                var hasAttachmentIndicator = count > 0;
 
                 // Update dropdown menu
                 var menu = document.getElementById('note-menu-' + noteId);
@@ -441,7 +441,7 @@ function updateAttachmentCountInMenu(noteId) {
                     for (var i = 0; i < attachmentItems.length; i++) {
                         var item = attachmentItems[i];
                         if (item.innerHTML.includes('lucide-paperclip')) {
-                            if (hasVisibleAttachments) {
+                            if (hasAttachmentIndicator) {
                                 item.classList.add('has-attachments');
                             } else {
                                 item.classList.remove('has-attachments');
@@ -453,7 +453,7 @@ function updateAttachmentCountInMenu(noteId) {
                 // Update settings button
                 var settingsBtn = document.getElementById('settings-btn-' + noteId);
                 if (settingsBtn) {
-                    if (hasVisibleAttachments) {
+                    if (hasAttachmentIndicator) {
                         settingsBtn.classList.add('has-attachments');
                     } else {
                         settingsBtn.classList.remove('has-attachments');
@@ -464,7 +464,7 @@ function updateAttachmentCountInMenu(noteId) {
                 var attachmentBtns = document.querySelectorAll('.btn-attachment[onclick*="' + noteId + '"]');
                 for (var i = 0; i < attachmentBtns.length; i++) {
                     var btn = attachmentBtns[i];
-                    if (hasVisibleAttachments) {
+                    if (hasAttachmentIndicator) {
                         btn.classList.add('has-attachments');
                     } else {
                         btn.classList.remove('has-attachments');
@@ -474,7 +474,7 @@ function updateAttachmentCountInMenu(noteId) {
                 // Also update toolbar attachment button
                 var toolbarAttachmentBtn = document.querySelector('.btn-attachment[data-note-id="' + noteId + '"]');
                 if (toolbarAttachmentBtn) {
-                    if (hasVisibleAttachments) {
+                    if (hasAttachmentIndicator) {
                         toolbarAttachmentBtn.classList.add('has-attachments');
                     } else {
                         toolbarAttachmentBtn.classList.remove('has-attachments');

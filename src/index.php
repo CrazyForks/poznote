@@ -646,7 +646,8 @@ $body_classes = trim($extra_body_classes);
                     // Share button
                     echo '<button type="button" class="toolbar-btn btn-share note-action-btn'.$share_class.'" title="'.t_h('index.toolbar.share_note', [], 'Share note').'" data-action="open-share-modal" data-note-id="'.$row['id'].'"><i class="lucide lucide-cloud"></i></button>';
                     
-                    echo '<button type="button" class="toolbar-btn btn-attachment note-action-btn'.($visible_attachments_count > 0 ? ' has-attachments' : '').'" title="'.t_h('index.toolbar.attachments_with_count', ['count' => $visible_attachments_count], 'Attachments ({{count}})').'" data-action="show-attachment-dialog" data-note-id="'.$row['id'].'"><i class="lucide lucide-paperclip"></i></button>';
+                    $attachment_indicator_class = ($attachments_count > 0) ? ' has-attachments' : '';
+                    echo '<button type="button" class="toolbar-btn btn-attachment note-action-btn'.$attachment_indicator_class.'" title="'.t_h('index.toolbar.attachments_with_count', ['count' => $visible_attachments_count], 'Attachments ({{count}})').'" data-action="show-attachment-dialog" data-note-id="'.$row['id'].'"><i class="lucide lucide-paperclip"></i></button>';
                     
                     // Reminder button
                     $has_reminder = !empty($row['reminder_at']);
