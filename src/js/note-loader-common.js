@@ -867,7 +867,7 @@ function buildImageMenuHTML(img) {
     let menuHTML = `
         <div class="image-menu-item" data-action="view-large">
             <i class="lucide-maximize-2"></i>
-            ${t('image_menu.view_large', null, 'View Large')}
+            ${t('image_menu.view_large', null, 'Open')}
         </div>
         <div class="image-menu-item" data-action="download">
             <i class="lucide lucide-download"></i>
