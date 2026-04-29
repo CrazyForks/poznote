@@ -553,12 +553,13 @@ html[data-theme='dark'] #app * {
 }
 
 .excalidraw-btn-blue {
-    background: #2563eb;
-    border: 1px solid #2563eb;
+    background: #007DB8;
+    border: 1px solid #007DB8;
 }
 
 .excalidraw-btn-blue:hover {
-    background: #3b82f6;
+    background: #005a8a;
+    border-color: #005a8a;
 }
 
 .excalidraw-btn-blue:disabled {
@@ -668,7 +669,8 @@ html[data-theme='dark'] #app * {
 }
 
 #saveAndExitBtn:hover {
-    background: #1d4ed8 !important;
+    background: #005a8a !important;
+    border-color: #005a8a !important;
 }
 
 .excalidraw-toolbar-btn:disabled,

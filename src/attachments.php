@@ -142,6 +142,18 @@ try {
             color: #64748b;
         }
 
+        /* Keep the attachment delete modal cancel action neutral. */
+        #deleteAttachmentConfirmModal .btn-cancel {
+            background-color: #6c757d !important;
+            color: #fff !important;
+            border: 1px solid #6c757d !important;
+        }
+
+        #deleteAttachmentConfirmModal .btn-cancel:hover {
+            background-color: #5a6268 !important;
+            border-color: #545b62 !important;
+        }
+
         @media (max-width: 600px) {
             .settings-banner-info {
                 flex-direction: column;

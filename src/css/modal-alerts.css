@@ -101,12 +101,12 @@
 }
 
 .alert-modal-button.primary {
-    background: var(--primary-color, #007bff);
+    background: var(--primary-color, #007DB8);
     color: white;
 }
 
 .alert-modal-button.primary:hover {
-    background: var(--primary-color-dark, #0056b3);
+    background: var(--primary-color-dark, #005a8a);
 }
 
 .alert-modal.snapshot-restore-confirm .alert-modal-button.primary,
@@ -164,13 +164,13 @@ html[data-theme='dark'] .alert-modal-button:hover,
 
 html[data-theme='dark'] .alert-modal-button.primary,
 .dark-mode .alert-modal-button.primary {
-    background-color: #1e3a5f;
+    background-color: var(--primary-color, #007DB8);
     color: white;
 }
 
 html[data-theme='dark'] .alert-modal-button.primary:hover,
 .dark-mode .alert-modal-button.primary:hover {
-    background-color: #2a4a7f;
+    background-color: var(--primary-color-dark, #005a8a);
 }
 
 html[data-theme='dark'] .alert-modal-button.secondary,
@@ -248,7 +248,7 @@ html[data-theme='dark'] .alert-modal-button.primary.snapshot-restore-confirm-but
 
 .progress-bar-inner {
     height: 100%;
-    background: var(--primary-color, #007bff);
+    background: var(--primary-color, #007DB8);
     width: 0%;
     position: absolute;
     left: 0;
@@ -270,7 +270,7 @@ html[data-theme='dark'] .progress-container,
     width: 20px;
     height: 20px;
     border: 2px solid var(--border-color, #e0e0e0);
-    border-top: 2px solid var(--primary-color, #007bff);
+    border-top: 2px solid var(--primary-color, #007DB8);
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -289,5 +289,5 @@ html[data-theme='dark'] .progress-container,
 html[data-theme='dark'] .spinner,
 .dark-mode .spinner {
     border-color: var(--border-color-dark, #4a5568);
-    border-top-color: var(--primary-color, #007bff);
+    border-top-color: var(--primary-color, #007DB8);
 }

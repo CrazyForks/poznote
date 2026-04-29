@@ -55,6 +55,14 @@
     display: block;
 }
 
+.excalidraw-container img.img-with-border {
+    max-width: calc(100% - 14px) !important;
+}
+
+.excalidraw-container img.img-with-border-no-padding {
+    max-width: calc(100% - 2px) !important;
+}
+
 /* Mode sombre */
 [data-theme="dark"] .excalidraw-container {
     background-color: #333333;

@@ -860,6 +860,7 @@ function buildImageMenuHTML(img) {
     const isMarkdownNote = img.closest('.markdown-preview') !== null ||
         img.closest('.markdown-editor') !== null ||
         img.closest('.note-entry[data-note-format="markdown"]') !== null;
+    const isSourceBackedMarkdownPreviewImage = isSourceBackedMarkdownImage(img);
 
     // Helper function for translations
     const t = window.t || ((key, params, fallback) => fallback);
@@ -867,7 +868,7 @@ function buildImageMenuHTML(img) {
     let menuHTML = `
         <div class="image-menu-item" data-action="view-large">
             <i class="lucide-maximize-2"></i>
-            ${t('image_menu.view_large', null, 'View Large')}
+            ${t('image_menu.view_large', null, 'Open')}
         </div>
         <div class="image-menu-item" data-action="download">
             <i class="lucide lucide-download"></i>
@@ -875,8 +876,9 @@ function buildImageMenuHTML(img) {
         </div>
     `;
 
-    // Add Resize option only on desktop (not on mobile) and NOT for markdown notes
-    if (!isMobile && !isMarkdownNote) {
+    // Add Resize option only on desktop. Markdown preview images are supported when backed by source syntax.
+    const canResizeImage = !isMobile && (!isMarkdownNote || isSourceBackedMarkdownPreviewImage);
+    if (canResizeImage) {
         menuHTML += `
         <div class="image-menu-item" data-action="resize">
             <i class="lucide-maximize"></i>
@@ -951,8 +953,9 @@ function buildImageMenuHTML(img) {
         `;
     }
 
-    // Add border toggle and delete options only for non-markdown notes
-    if (!isMarkdownNote) {
+    // Add border toggles for HTML images and rendered Markdown images backed by source syntax.
+    const canToggleBorder = !isMarkdownNote || isSourceBackedMarkdownPreviewImage;
+    if (canToggleBorder) {
         const hasBorder = img.classList.contains('img-with-border');
         const hasBorderNoPadding = img.classList.contains('img-with-border-no-padding');
         menuHTML += `
@@ -965,8 +968,11 @@ function buildImageMenuHTML(img) {
                 ${hasBorderNoPadding ? t('image_menu.remove_border_no_padding', null, 'Remove Border without padding') : t('image_menu.add_border_no_padding', null, 'Add Border without padding')}
             </div>
         `;
+    }
 
-        // Add Delete option at the end
+    // Add Delete option at the end for HTML images and rendered Markdown images backed by source syntax.
+    const canDeleteImage = !isMarkdownNote || isSourceBackedMarkdownPreviewImage;
+    if (canDeleteImage) {
         menuHTML += `
             <div class="image-menu-item" data-action="delete-image" style="color: #dc3545;">
                 <i class="lucide lucide-trash-2"></i>
@@ -1079,27 +1085,24 @@ function adjustImageMenuPosition(menu, clickX, clickY) {
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const padding = 8;
+    const cursorOffset = 12;
 
-    // If menu goes off the right edge, move it left
-    if (menuRect.right > viewportWidth - padding) {
-        menu.style.left = (clickX - (menuRect.width / 2)) + 'px';
-        menu.style.transform = 'translate(0, -120%)';
+    let left = clickX - (menuRect.width / 2);
+    let top = clickY - menuRect.height - cursorOffset;
+
+    if (top < padding) {
+        top = clickY + cursorOffset;
     }
 
-    // If menu goes off the left edge, move it right
-    // Recalculate after potential right edge adjustment
-    const updatedMenuRect = menu.getBoundingClientRect();
-    if (updatedMenuRect.left < padding) {
-        // Position menu with padding from left edge
-        menu.style.left = (padding + menuRect.width / 2) + 'px';
-        menu.style.transform = 'translate(-50%, -120%)';
+    if (top + menuRect.height > viewportHeight - padding) {
+        top = Math.max(padding, viewportHeight - menuRect.height - padding);
     }
 
-    // If menu goes off the top edge, move it below the cursor
-    if (menuRect.top < padding) {
-        menu.style.top = clickY + 'px';
-        menu.style.transform = 'translate(-50%, 20%)';
-    }
+    left = Math.max(padding, Math.min(left, viewportWidth - menuRect.width - padding));
+
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    menu.style.transform = 'none';
 }
 
 /**
@@ -1583,42 +1586,18 @@ function performImageDeletion(img) {
         // Mark image as manually deleted to avoid double deletion from observer
         img._manuallyDeleted = true;
 
-        // Try to find attachment ID from src to delete it from server
-        const src = img.getAttribute('src');
-        if (src) {
-            // Match /api/v1/notes/{id}/attachments/{attachmentId}
-            const attachmentMatch = src.match(/\/api\/v1\/notes\/(\d+)\/attachments\/([a-fA-F0-9_-]+)/);
-            if (attachmentMatch) {
-                const noteId = attachmentMatch[1];
-                const attachmentId = attachmentMatch[2];
+        if (isSourceBackedMarkdownImage(img)) {
+            const markdownNoteEntry = img.closest('.noteentry');
+            const markdownNoteIdMatch = markdownNoteEntry?.id.match(/entry(\d+)/);
+            const markdownNoteId = markdownNoteIdMatch ? markdownNoteIdMatch[1] : null;
 
-                // Only delete if the image belongs to the note it's being deleted from
-                const noteEntry = img.closest('.noteentry');
-                const noteIdMatch = noteEntry?.id.match(/entry(\d+)/);
-                const activeNoteId = noteIdMatch ? noteIdMatch[1] : null;
-
-                if (activeNoteId && noteId === activeNoteId) {
-                    // Call API if possible
-                    if (typeof window.deleteAttachment === 'function') {
-                        // Temporarily set currentNoteIdForAttachments if needed
-                        const oldNoteId = window.currentNoteIdForAttachments;
-                        window.currentNoteIdForAttachments = noteId;
-                        window.deleteAttachment(attachmentId);
-                        window.currentNoteIdForAttachments = oldNoteId;
-                    } else {
-                        // Direct fetch as fallback
-                        const formData = new FormData();
-                        formData.append('action', 'delete');
-                        formData.append('note_id', noteId);
-                        formData.append('attachment_id', attachmentId);
-                        if (typeof window.selectedWorkspace !== 'undefined' && window.selectedWorkspace) {
-                            formData.append('workspace', window.selectedWorkspace);
-                        }
-                        fetch('/api/v1/notes/' + noteId + '/attachments', { method: 'POST', body: formData });
-                    }
-                }
+            if (deleteSourceBackedMarkdownImage(img)) {
+                deleteImageAttachmentIfOwnedByNote(img, markdownNoteId);
             }
+            return;
         }
+
+        deleteImageAttachmentIfOwnedByNote(img);
 
         // Find the container (could be excalidraw-container or just the img itself)
         const container = img.closest('.excalidraw-container');
@@ -1640,16 +1619,121 @@ function performImageDeletion(img) {
             window.markNoteAsModified(); // Mark note as edited
         }
 
-        // Trigger automatic save after a short delay
-        setTimeout(function () {
-            if (typeof window.saveNoteImmediately === 'function') {
-                window.saveNoteImmediately(); // Save to server
-            }
-        }, 100);
+        if (typeof window.saveNoteImmediately === 'function') {
+            window.saveNoteImmediately(); // Save to server
+        } else if (typeof window.saveNoteToServer === 'function') {
+            window.saveNoteToServer();
+        }
 
     } catch (error) {
         console.warn('Error deleting image:', error);
     }
+}
+
+function deleteImageAttachmentIfOwnedByNote(img, expectedNoteId) {
+    const src = img ? img.getAttribute('src') : '';
+    if (!src) return;
+
+    const attachmentMatch = src.match(/\/api\/v1\/notes\/(\d+)\/attachments\/([a-fA-F0-9_-]+)/);
+    if (!attachmentMatch) return;
+
+    const noteId = attachmentMatch[1];
+    const attachmentId = attachmentMatch[2];
+    const noteEntry = img.closest('.noteentry');
+    const noteIdMatch = noteEntry?.id.match(/entry(\d+)/);
+    const activeNoteId = expectedNoteId || (noteIdMatch ? noteIdMatch[1] : null);
+
+    if (!activeNoteId || noteId !== activeNoteId) return;
+
+    if (typeof window.deleteAttachment === 'function') {
+        const oldNoteId = window.currentNoteIdForAttachments;
+        window.currentNoteIdForAttachments = noteId;
+        window.deleteAttachment(attachmentId);
+        window.currentNoteIdForAttachments = oldNoteId;
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('action', 'delete');
+    formData.append('note_id', noteId);
+    formData.append('attachment_id', attachmentId);
+    if (typeof window.selectedWorkspace !== 'undefined' && window.selectedWorkspace) {
+        formData.append('workspace', window.selectedWorkspace);
+    }
+    fetch('/api/v1/notes/' + noteId + '/attachments', { method: 'POST', body: formData });
+}
+
+function isSourceBackedMarkdownImage(img) {
+    return !!(img && img.closest('.markdown-preview') && (
+        img.hasAttribute('data-markdown-image-index') ||
+        !!img.closest('.excalidraw-container[data-markdown-excalidraw-index]')
+    ));
+}
+
+function toggleSourceBackedMarkdownImageBorder(img, borderClass) {
+    if (!isSourceBackedMarkdownImage(img)) {
+        return false;
+    }
+
+    if (img.closest('.excalidraw-container[data-markdown-excalidraw-index]')) {
+        if (typeof window.toggleMarkdownExcalidrawImageBorder === 'function') {
+            return window.toggleMarkdownExcalidrawImageBorder(img, borderClass);
+        }
+
+        console.warn('Markdown Excalidraw image border toggle is not available.');
+        return false;
+    }
+
+    if (typeof window.toggleMarkdownImageBorder === 'function') {
+        return window.toggleMarkdownImageBorder(img, borderClass);
+    }
+
+    console.warn('Markdown image border toggle is not available.');
+    return false;
+}
+
+function resizeSourceBackedMarkdownImage(img, width) {
+    if (!isSourceBackedMarkdownImage(img)) {
+        return false;
+    }
+
+    if (img.closest('.excalidraw-container[data-markdown-excalidraw-index]')) {
+        if (typeof window.resizeMarkdownExcalidrawImage === 'function') {
+            return window.resizeMarkdownExcalidrawImage(img, width);
+        }
+
+        console.warn('Markdown Excalidraw image resize is not available.');
+        return false;
+    }
+
+    if (typeof window.resizeMarkdownImage === 'function') {
+        return window.resizeMarkdownImage(img, width);
+    }
+
+    console.warn('Markdown image resize is not available.');
+    return false;
+}
+
+function deleteSourceBackedMarkdownImage(img) {
+    if (!isSourceBackedMarkdownImage(img)) {
+        return false;
+    }
+
+    if (img.closest('.excalidraw-container[data-markdown-excalidraw-index]')) {
+        if (typeof window.deleteMarkdownExcalidrawImage === 'function') {
+            return window.deleteMarkdownExcalidrawImage(img);
+        }
+
+        console.warn('Markdown Excalidraw image delete is not available.');
+        return false;
+    }
+
+    if (typeof window.deleteMarkdownImage === 'function') {
+        return window.deleteMarkdownImage(img);
+    }
+
+    console.warn('Markdown image delete is not available.');
+    return false;
 }
 
 /**
@@ -1659,6 +1743,10 @@ function toggleImageBorder(img) {
     if (!img) return;
 
     try {
+        if (toggleSourceBackedMarkdownImageBorder(img, 'img-with-border')) {
+            return;
+        }
+
         // Check if image currently has the border class
         const hasBorderClass = img.classList.contains('img-with-border');
 
@@ -1677,12 +1765,11 @@ function toggleImageBorder(img) {
             window.markNoteAsModified(); // Mark note as edited
         }
 
-        // Trigger automatic save after a short delay
-        setTimeout(function () {
-            if (typeof window.saveNoteImmediately === 'function') {
-                window.saveNoteImmediately(); // Save to server
-            }
-        }, 100);
+        if (typeof window.saveNoteImmediately === 'function') {
+            window.saveNoteImmediately(); // Save to server
+        } else if (typeof window.saveNoteToServer === 'function') {
+            window.saveNoteToServer();
+        }
 
     } catch (error) {
         console.warn('Error toggling image border:', error);
@@ -1696,6 +1783,10 @@ function toggleImageBorderNoPadding(img) {
     if (!img) return;
 
     try {
+        if (toggleSourceBackedMarkdownImageBorder(img, 'img-with-border-no-padding')) {
+            return;
+        }
+
         // Check if image currently has the no-padding border class
         const hasBorderClass = img.classList.contains('img-with-border-no-padding');
 
@@ -2044,16 +2135,20 @@ function enableImageResize(img) {
             // Actually, keeping inline-block is usually safer for resized images.
         }
 
+        if (resizeSourceBackedMarkdownImage(img, finalWidth)) {
+            return;
+        }
+
         // Trigger note save and modification indicator
         if (typeof window.markNoteAsModified === 'function') {
             window.markNoteAsModified();
         }
 
-        setTimeout(function () {
-            if (typeof window.saveNoteImmediately === 'function') {
-                window.saveNoteImmediately();
-            }
-        }, 100);
+        if (typeof window.saveNoteImmediately === 'function') {
+            window.saveNoteImmediately();
+        } else if (typeof window.saveNoteToServer === 'function') {
+            window.saveNoteToServer();
+        }
     });
 
     // Click outside to remove handle

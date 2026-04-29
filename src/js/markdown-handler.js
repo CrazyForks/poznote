@@ -15,6 +15,348 @@ function _mdEscapeHtmlAttribute(str) {
     return _mdEscapeHtml(str).replace(/\r\n|\r|\n/g, '&#10;');
 }
 
+function _mdGetMarkdownImageRegex() {
+    return /!\[([^\]]*)\]\(([^\s\)]+)(?:\s+"([^"]+)")?\)(?:\{((?=[^}]*(?:\.img-with-border(?:-no-padding)?(?=\s|})|\bwidth\s*=))[^}]*)\})?/g;
+}
+
+function _mdNormalizeMarkdownImageBorderClass(borderClass) {
+    return ['img-with-border', 'img-with-border-no-padding'].indexOf(borderClass) !== -1 ? borderClass : '';
+}
+
+function _mdGetMarkdownImageBorderClass(attrBlock) {
+    var attrs = String(attrBlock || '');
+    if (/(^|\s)\.img-with-border-no-padding(?=\s|$)/.test(attrs)) {
+        return 'img-with-border-no-padding';
+    }
+    if (/(^|\s)\.img-with-border(?=\s|$)/.test(attrs)) {
+        return 'img-with-border';
+    }
+    return '';
+}
+
+function _mdNormalizeMarkdownImageWidth(width) {
+    var parsedWidth = parseInt(String(width || '').replace(/px$/i, ''), 10);
+    return isFinite(parsedWidth) && parsedWidth > 0 ? Math.round(parsedWidth) : null;
+}
+
+function _mdGetMarkdownImageWidth(attrBlock) {
+    var attrs = String(attrBlock || '');
+    var match = attrs.match(/(?:^|\s)width\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s]+))/i);
+    if (!match) {
+        return null;
+    }
+
+    return _mdNormalizeMarkdownImageWidth(match[1] || match[2] || match[3]);
+}
+
+function _mdGetMarkdownImageParts(markdownImage) {
+    var match = String(markdownImage || '').match(/^([\s\S]*?\))(?:\{([^}]*)\})?$/);
+    if (!match) {
+        return null;
+    }
+
+    return {
+        baseImage: match[1],
+        attrBlock: match[2] || ''
+    };
+}
+
+function _mdGetPassthroughMarkdownImageAttrTokens(attrBlock) {
+    var attrs = String(attrBlock || '')
+        .replace(/(?:^|\s)\.img-with-border(?:-no-padding)?(?=\s|$)/g, ' ')
+        .replace(/(?:^|\s)width\s*=\s*(?:"[^"]+"|'[^']+'|[^\s]+)/ig, ' ')
+        .trim();
+
+    return attrs ? attrs.split(/\s+/) : [];
+}
+
+function _mdBuildMarkdownImageWithAttrs(markdownImage, borderClass, width) {
+    var parts = _mdGetMarkdownImageParts(markdownImage);
+    if (!parts) {
+        return markdownImage;
+    }
+
+    var attrTokens = _mdGetPassthroughMarkdownImageAttrTokens(parts.attrBlock);
+    var normalizedBorderClass = _mdNormalizeMarkdownImageBorderClass(borderClass);
+    var normalizedWidth = _mdNormalizeMarkdownImageWidth(width);
+
+    if (normalizedBorderClass) {
+        attrTokens.push('.' + normalizedBorderClass);
+    }
+    if (normalizedWidth) {
+        attrTokens.push('width=' + normalizedWidth);
+    }
+
+    return attrTokens.length ? parts.baseImage + '{' + attrTokens.join(' ') + '}' : parts.baseImage;
+}
+
+function _mdSetMarkdownImageBorderClass(markdownImage, borderClass) {
+    var parts = _mdGetMarkdownImageParts(markdownImage);
+    if (!parts) {
+        return markdownImage;
+    }
+
+    return _mdBuildMarkdownImageWithAttrs(markdownImage, borderClass, _mdGetMarkdownImageWidth(parts.attrBlock));
+}
+
+function _mdSetMarkdownImageWidth(markdownImage, width) {
+    var parts = _mdGetMarkdownImageParts(markdownImage);
+    if (!parts) {
+        return markdownImage;
+    }
+
+    return _mdBuildMarkdownImageWithAttrs(markdownImage, _mdGetMarkdownImageBorderClass(parts.attrBlock), width);
+}
+
+function _mdGetIgnoredMarkdownImageRanges(content) {
+    var ranges = [];
+    var rawContent = String(content || '');
+    var fencedRegex = /(?:^|\n)(\s*```[^\n]*\n[\s\S]*?\n\s*```)(?=\n|$)/g;
+    var inlineCodeRegex = /(?<!\\)`([^`\n]+?)(?<!\\)`/g;
+    var match;
+
+    while ((match = fencedRegex.exec(rawContent)) !== null) {
+        ranges.push({ start: match.index, end: fencedRegex.lastIndex });
+    }
+
+    while ((match = inlineCodeRegex.exec(rawContent)) !== null) {
+        ranges.push({ start: match.index, end: inlineCodeRegex.lastIndex });
+    }
+
+    return ranges;
+}
+
+function _mdIsOffsetInRanges(offset, ranges) {
+    for (var i = 0; i < ranges.length; i++) {
+        if (offset >= ranges[i].start && offset < ranges[i].end) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function _mdIsEscapedMarkdownImage(content, offset) {
+    var slashCount = 0;
+    for (var i = offset - 1; i >= 0 && content.charAt(i) === '\\'; i--) {
+        slashCount++;
+    }
+    return slashCount % 2 === 1;
+}
+
+function _mdUpdateMarkdownImageBorderAtIndex(content, targetImageIndex, borderClass) {
+    var rawContent = String(content || '');
+    var imageRegex = _mdGetMarkdownImageRegex();
+    var ignoredRanges = _mdGetIgnoredMarkdownImageRanges(rawContent);
+    var renderedImageIndex = 0;
+    var match;
+
+    while ((match = imageRegex.exec(rawContent)) !== null) {
+        if (_mdIsOffsetInRanges(match.index, ignoredRanges) || _mdIsEscapedMarkdownImage(rawContent, match.index)) {
+            continue;
+        }
+
+        if (renderedImageIndex === targetImageIndex) {
+            var updatedImage = _mdSetMarkdownImageBorderClass(match[0], borderClass);
+            return rawContent.slice(0, match.index) + updatedImage + rawContent.slice(imageRegex.lastIndex);
+        }
+
+        renderedImageIndex++;
+    }
+
+    return null;
+}
+
+function _mdUpdateMarkdownImageWidthAtIndex(content, targetImageIndex, width) {
+    var rawContent = String(content || '');
+    var imageRegex = _mdGetMarkdownImageRegex();
+    var ignoredRanges = _mdGetIgnoredMarkdownImageRanges(rawContent);
+    var renderedImageIndex = 0;
+    var match;
+
+    while ((match = imageRegex.exec(rawContent)) !== null) {
+        if (_mdIsOffsetInRanges(match.index, ignoredRanges) || _mdIsEscapedMarkdownImage(rawContent, match.index)) {
+            continue;
+        }
+
+        if (renderedImageIndex === targetImageIndex) {
+            var updatedImage = _mdSetMarkdownImageWidth(match[0], width);
+            return rawContent.slice(0, match.index) + updatedImage + rawContent.slice(imageRegex.lastIndex);
+        }
+
+        renderedImageIndex++;
+    }
+
+    return null;
+}
+
+function _mdRemoveMarkdownImageMatch(rawContent, start, end) {
+    var lineStart = rawContent.lastIndexOf('\n', start - 1) + 1;
+    var nextLineBreak = rawContent.indexOf('\n', end);
+    var lineEnd = nextLineBreak === -1 ? rawContent.length : nextLineBreak;
+    var beforeOnLine = rawContent.slice(lineStart, start);
+    var afterOnLine = rawContent.slice(end, lineEnd);
+
+    if (/^[\t ]*$/.test(beforeOnLine) && /^[\t ]*$/.test(afterOnLine)) {
+        if (nextLineBreak !== -1) {
+            return rawContent.slice(0, lineStart) + rawContent.slice(nextLineBreak + 1);
+        }
+        if (lineStart > 0) {
+            return rawContent.slice(0, lineStart - 1);
+        }
+        return '';
+    }
+
+    return rawContent.slice(0, start) + rawContent.slice(end);
+}
+
+function _mdDeleteMarkdownImageAtIndex(content, targetImageIndex) {
+    var rawContent = String(content || '');
+    var imageRegex = _mdGetMarkdownImageRegex();
+    var ignoredRanges = _mdGetIgnoredMarkdownImageRanges(rawContent);
+    var renderedImageIndex = 0;
+    var match;
+
+    while ((match = imageRegex.exec(rawContent)) !== null) {
+        if (_mdIsOffsetInRanges(match.index, ignoredRanges) || _mdIsEscapedMarkdownImage(rawContent, match.index)) {
+            continue;
+        }
+
+        if (renderedImageIndex === targetImageIndex) {
+            return _mdRemoveMarkdownImageMatch(rawContent, match.index, imageRegex.lastIndex);
+        }
+
+        renderedImageIndex++;
+    }
+
+    return null;
+}
+
+function _mdSetExcalidrawImageBorderClass(imageElement, borderClass) {
+    if (!imageElement) {
+        return;
+    }
+
+    var normalizedBorderClass = _mdNormalizeMarkdownImageBorderClass(borderClass);
+    var classNames = (imageElement.getAttribute('class') || '')
+        .split(/\s+/)
+        .filter(function (className, index, allClassNames) {
+            return !!className &&
+                className !== 'img-with-border' &&
+                className !== 'img-with-border-no-padding' &&
+                allClassNames.indexOf(className) === index;
+        });
+
+    if (normalizedBorderClass) {
+        classNames.push(normalizedBorderClass);
+    }
+
+    if (classNames.length > 0) {
+        imageElement.setAttribute('class', classNames.join(' '));
+    } else {
+        imageElement.removeAttribute('class');
+    }
+}
+
+function _mdSetExcalidrawImageWidth(imageElement, width) {
+    var normalizedWidth = _mdNormalizeMarkdownImageWidth(width);
+    if (!imageElement || !normalizedWidth) {
+        return;
+    }
+
+    imageElement.setAttribute('width', String(normalizedWidth));
+    imageElement.removeAttribute('height');
+    imageElement.style.width = normalizedWidth + 'px';
+    imageElement.style.maxWidth = '100%';
+    imageElement.style.height = 'auto';
+}
+
+function _mdMutateExcalidrawBlockHtml(blockHtml, mutator) {
+    var template = document.createElement('template');
+    template.innerHTML = String(blockHtml || '').trim();
+    var container = template.content.firstElementChild;
+    if (!container || container.tagName !== 'DIV' || !container.classList.contains('excalidraw-container')) {
+        return blockHtml;
+    }
+
+    var imageElement = container.querySelector('img');
+    if (!imageElement) {
+        return blockHtml;
+    }
+
+    if (typeof mutator === 'function') {
+        mutator(container, imageElement);
+    }
+
+    container.removeAttribute('data-markdown-excalidraw-index');
+    Array.prototype.forEach.call(container.querySelectorAll('[data-markdown-excalidraw-index]'), function (node) {
+        node.removeAttribute('data-markdown-excalidraw-index');
+    });
+
+    return container.outerHTML;
+}
+
+function _mdUpdateExcalidrawBlockAtIndex(content, targetBlockIndex, mutator) {
+    var rawContent = String(content || '');
+    var excalidrawRegex = _mdGetExcalidrawBlockRegex();
+    var ignoredRanges = _mdGetIgnoredMarkdownImageRanges(rawContent);
+    var renderedBlockIndex = 0;
+    var match;
+
+    while ((match = excalidrawRegex.exec(rawContent)) !== null) {
+        if (_mdIsOffsetInRanges(match.index, ignoredRanges)) {
+            continue;
+        }
+
+        if (renderedBlockIndex === targetBlockIndex) {
+            var updatedBlock = _mdMutateExcalidrawBlockHtml(match[0], mutator);
+            return rawContent.slice(0, match.index) + updatedBlock + rawContent.slice(excalidrawRegex.lastIndex);
+        }
+
+        renderedBlockIndex++;
+    }
+
+    return null;
+}
+
+function _mdUpdateExcalidrawImageBorderAtIndex(content, targetBlockIndex, borderClass) {
+    return _mdUpdateExcalidrawBlockAtIndex(content, targetBlockIndex, function (container, imageElement) {
+        _mdSetExcalidrawImageBorderClass(imageElement, borderClass);
+    });
+}
+
+function _mdUpdateExcalidrawImageWidthAtIndex(content, targetBlockIndex, width) {
+    var normalizedWidth = _mdNormalizeMarkdownImageWidth(width);
+    if (!normalizedWidth) {
+        return null;
+    }
+
+    return _mdUpdateExcalidrawBlockAtIndex(content, targetBlockIndex, function (container, imageElement) {
+        _mdSetExcalidrawImageWidth(imageElement, normalizedWidth);
+    });
+}
+
+function _mdDeleteExcalidrawBlockAtIndex(content, targetBlockIndex) {
+    var rawContent = String(content || '');
+    var excalidrawRegex = _mdGetExcalidrawBlockRegex();
+    var ignoredRanges = _mdGetIgnoredMarkdownImageRanges(rawContent);
+    var renderedBlockIndex = 0;
+    var match;
+
+    while ((match = excalidrawRegex.exec(rawContent)) !== null) {
+        if (_mdIsOffsetInRanges(match.index, ignoredRanges)) {
+            continue;
+        }
+
+        if (renderedBlockIndex === targetBlockIndex) {
+            return _mdRemoveMarkdownImageMatch(rawContent, match.index, excalidrawRegex.lastIndex);
+        }
+
+        renderedBlockIndex++;
+    }
+
+    return null;
+}
+
 function _mdNormalizeMermaidSourceForRendering(source) {
     return String(source || '')
         .replace(/\\n/g, '<br/>')
@@ -1016,7 +1358,7 @@ function parseMarkdown(text) {
         return attrs.length ? ' ' + attrs.join(' ') : '';
     }
 
-    function sanitizeExcalidrawContainerHtml(html) {
+    function sanitizeExcalidrawContainerHtml(html, markdownExcalidrawIndex) {
         var template = document.createElement('template');
         template.innerHTML = String(html || '').trim();
         var container = template.content.firstElementChild;
@@ -1025,6 +1367,9 @@ function parseMarkdown(text) {
         }
 
         var divAttrs = getSafeExcalidrawAttrs(container, ['id', 'class', 'style', 'data-diagram-id', 'data-excalidraw', 'contenteditable']);
+            if (typeof markdownExcalidrawIndex === 'number' && !isNaN(markdownExcalidrawIndex)) {
+                divAttrs += ' data-markdown-excalidraw-index="' + markdownExcalidrawIndex + '"';
+            }
         var childHtml = '';
 
         Array.prototype.forEach.call(container.childNodes, function (child) {
@@ -1124,17 +1469,29 @@ function parseMarkdown(text) {
     let protectedElements = [];
     let protectedIndex = 0;
 
-    // Protect images first ![alt](url "title")
-    text = text.replace(/!\[([^\]]*)\]\(([^\s\)]+)(?:\s+"([^"]+)")?\)/g, function (match, alt, url, title) {
+    let markdownImageIndex = 0;
+
+    // Protect images first ![alt](url "title") with optional {.img-with-border} attributes
+    text = text.replace(_mdGetMarkdownImageRegex(), function (match, alt, url, title, attrBlock) {
         let placeholder = '\x00PIMG' + protectedIndex + '\x00';
-        let imgTag;
-        // Add lazy loading and async decoding for better performance with many images
+        let imageAttrs = ' src="' + escapeHtml(url) + '" alt="' + escapeHtml(alt) + '"';
+        const borderClass = _mdGetMarkdownImageBorderClass(attrBlock);
+        const imageWidth = _mdGetMarkdownImageWidth(attrBlock);
+
         if (title) {
-            imgTag = '<img src="' + url + '" alt="' + alt + '" title="' + title + '" loading="lazy" decoding="async">';
-        } else {
-            imgTag = '<img src="' + url + '" alt="' + alt + '" loading="lazy" decoding="async">';
+            imageAttrs += ' title="' + escapeHtml(title) + '"';
         }
+        if (borderClass) {
+            imageAttrs += ' class="' + borderClass + '"';
+        }
+        if (imageWidth) {
+            imageAttrs += ' width="' + imageWidth + '" style="width: ' + imageWidth + 'px;"';
+        }
+        imageAttrs += ' loading="lazy" decoding="async" data-markdown-image-index="' + markdownImageIndex + '"';
+
+        let imgTag = '<img' + imageAttrs + '>';
         protectedElements[protectedIndex] = imgTag;
+        markdownImageIndex++;
         protectedIndex++;
         return placeholder;
     });
@@ -1164,10 +1521,12 @@ function parseMarkdown(text) {
     });
 
     // Protect Poznote-generated Excalidraw containers as safe block HTML.
+    var markdownExcalidrawIndex = 0;
     text = text.replace(/<div\b(?=[^>]*\bclass\s*=\s*(["'])[^"']*\bexcalidraw-container\b[^"']*\1)[^>]*>[\s\S]*?<\/div>/gi, function (match) {
         let placeholder = '\x00PEXCALIDRAW' + protectedIndex + '\x00';
-        protectedElements[protectedIndex] = sanitizeExcalidrawContainerHtml(match);
+        protectedElements[protectedIndex] = sanitizeExcalidrawContainerHtml(match, markdownExcalidrawIndex);
         protectedIndex++;
+        markdownExcalidrawIndex++;
         return '\n' + placeholder + '\n';
     });
 
@@ -2940,6 +3299,236 @@ function toggleMarkdownModeSplit(noteId) {
     }
 }
 
+function persistMarkdownImageSourceChange(noteEntry, editorDiv, previewDiv, noteId, newContent) {
+    renderMarkdownEditorContent(editorDiv, newContent);
+    noteEntry.setAttribute('data-markdown-content', newContent);
+
+    if (typeof noteid !== 'undefined') {
+        noteid = noteId;
+    }
+    window.noteid = noteId;
+
+    try {
+        localStorage.setItem('poznote_draft_' + noteId, newContent);
+
+        var titleInput = document.getElementById('inp' + noteId);
+        var tagsElem = document.getElementById('tags' + noteId);
+        if (titleInput) {
+            localStorage.setItem('poznote_title_' + noteId, titleInput.value);
+        }
+        if (tagsElem) {
+            localStorage.setItem('poznote_tags_' + noteId, tagsElem.value);
+        }
+    } catch (e) {
+        console.warn('Could not persist markdown image change draft:', e);
+    }
+
+    if (previewDiv) {
+        renderMarkdownPreview(previewDiv, newContent, noteId, { delay: 50 });
+    }
+
+    if (typeof window.markNoteAsModified === 'function') {
+        window.markNoteAsModified();
+    }
+
+    if (typeof window.saveNoteToServer === 'function') {
+        window.saveNoteToServer();
+    } else if (typeof window.saveNoteImmediately === 'function') {
+        window.saveNoteImmediately();
+    }
+}
+
+function toggleMarkdownImageBorder(img, borderClass) {
+    var normalizedBorderClass = _mdNormalizeMarkdownImageBorderClass(borderClass);
+    if (!img || !normalizedBorderClass) return false;
+
+    var noteEntry = img.closest('.noteentry');
+    if (!noteEntry) return false;
+
+    var noteId = noteEntry.id ? noteEntry.id.replace('entry', '') : null;
+    var imageIndex = parseInt(img.getAttribute('data-markdown-image-index'), 10);
+    if (!noteId || isNaN(imageIndex)) return false;
+
+    var editorDiv = noteEntry.querySelector('.markdown-editor');
+    var previewDiv = noteEntry.querySelector('.markdown-preview');
+    if (!editorDiv) return false;
+
+    var content = typeof getMarkdownContentForNote === 'function'
+        ? getMarkdownContentForNote(noteId)
+        : normalizeContentEditableText(editorDiv);
+    var currentBorderClass = img.classList.contains(normalizedBorderClass) ? normalizedBorderClass : '';
+    var nextBorderClass = currentBorderClass === normalizedBorderClass ? '' : normalizedBorderClass;
+    var newContent = _mdUpdateMarkdownImageBorderAtIndex(content, imageIndex, nextBorderClass);
+
+    if (newContent === null) {
+        console.warn('Could not find the markdown source image to update.');
+        return false;
+    }
+
+    persistMarkdownImageSourceChange(noteEntry, editorDiv, previewDiv, noteId, newContent);
+
+    return true;
+}
+
+function resizeMarkdownImage(img, width) {
+    var normalizedWidth = _mdNormalizeMarkdownImageWidth(width);
+    if (!img || !normalizedWidth) return false;
+
+    var noteEntry = img.closest('.noteentry');
+    if (!noteEntry) return false;
+
+    var noteId = noteEntry.id ? noteEntry.id.replace('entry', '') : null;
+    var imageIndex = parseInt(img.getAttribute('data-markdown-image-index'), 10);
+    if (!noteId || isNaN(imageIndex)) return false;
+
+    var editorDiv = noteEntry.querySelector('.markdown-editor');
+    var previewDiv = noteEntry.querySelector('.markdown-preview');
+    if (!editorDiv) return false;
+
+    var content = typeof getMarkdownContentForNote === 'function'
+        ? getMarkdownContentForNote(noteId)
+        : normalizeContentEditableText(editorDiv);
+    var newContent = _mdUpdateMarkdownImageWidthAtIndex(content, imageIndex, normalizedWidth);
+
+    if (newContent === null) {
+        console.warn('Could not find the markdown source image to resize.');
+        return false;
+    }
+
+    persistMarkdownImageSourceChange(noteEntry, editorDiv, previewDiv, noteId, newContent);
+
+    return true;
+}
+
+function deleteMarkdownImage(img) {
+    if (!img) return false;
+
+    var noteEntry = img.closest('.noteentry');
+    if (!noteEntry) return false;
+
+    var noteId = noteEntry.id ? noteEntry.id.replace('entry', '') : null;
+    var imageIndex = parseInt(img.getAttribute('data-markdown-image-index'), 10);
+    if (!noteId || isNaN(imageIndex)) return false;
+
+    var editorDiv = noteEntry.querySelector('.markdown-editor');
+    var previewDiv = noteEntry.querySelector('.markdown-preview');
+    if (!editorDiv) return false;
+
+    var content = typeof getMarkdownContentForNote === 'function'
+        ? getMarkdownContentForNote(noteId)
+        : normalizeContentEditableText(editorDiv);
+    var newContent = _mdDeleteMarkdownImageAtIndex(content, imageIndex);
+
+    if (newContent === null) {
+        console.warn('Could not find the markdown source image to delete.');
+        return false;
+    }
+
+    persistMarkdownImageSourceChange(noteEntry, editorDiv, previewDiv, noteId, newContent);
+
+    return true;
+}
+
+function _mdGetMarkdownExcalidrawBlockIndex(img) {
+    if (!img) return NaN;
+
+    var excalidrawContainer = img.closest('.excalidraw-container');
+    if (!excalidrawContainer) return NaN;
+
+    return parseInt(excalidrawContainer.getAttribute('data-markdown-excalidraw-index'), 10);
+}
+
+function toggleMarkdownExcalidrawImageBorder(img, borderClass) {
+    var normalizedBorderClass = _mdNormalizeMarkdownImageBorderClass(borderClass);
+    if (!img || !normalizedBorderClass) return false;
+
+    var noteEntry = img.closest('.noteentry');
+    if (!noteEntry) return false;
+
+    var noteId = noteEntry.id ? noteEntry.id.replace('entry', '') : null;
+    var blockIndex = _mdGetMarkdownExcalidrawBlockIndex(img);
+    if (!noteId || isNaN(blockIndex)) return false;
+
+    var editorDiv = noteEntry.querySelector('.markdown-editor');
+    var previewDiv = noteEntry.querySelector('.markdown-preview');
+    if (!editorDiv) return false;
+
+    var content = typeof getMarkdownContentForNote === 'function'
+        ? getMarkdownContentForNote(noteId)
+        : normalizeContentEditableText(editorDiv);
+    var currentBorderClass = img.classList.contains(normalizedBorderClass) ? normalizedBorderClass : '';
+    var nextBorderClass = currentBorderClass === normalizedBorderClass ? '' : normalizedBorderClass;
+    var newContent = _mdUpdateExcalidrawImageBorderAtIndex(content, blockIndex, nextBorderClass);
+
+    if (newContent === null) {
+        console.warn('Could not find the markdown source Excalidraw block to update.');
+        return false;
+    }
+
+    persistMarkdownImageSourceChange(noteEntry, editorDiv, previewDiv, noteId, newContent);
+
+    return true;
+}
+
+function resizeMarkdownExcalidrawImage(img, width) {
+    var normalizedWidth = _mdNormalizeMarkdownImageWidth(width);
+    if (!img || !normalizedWidth) return false;
+
+    var noteEntry = img.closest('.noteentry');
+    if (!noteEntry) return false;
+
+    var noteId = noteEntry.id ? noteEntry.id.replace('entry', '') : null;
+    var blockIndex = _mdGetMarkdownExcalidrawBlockIndex(img);
+    if (!noteId || isNaN(blockIndex)) return false;
+
+    var editorDiv = noteEntry.querySelector('.markdown-editor');
+    var previewDiv = noteEntry.querySelector('.markdown-preview');
+    if (!editorDiv) return false;
+
+    var content = typeof getMarkdownContentForNote === 'function'
+        ? getMarkdownContentForNote(noteId)
+        : normalizeContentEditableText(editorDiv);
+    var newContent = _mdUpdateExcalidrawImageWidthAtIndex(content, blockIndex, normalizedWidth);
+
+    if (newContent === null) {
+        console.warn('Could not find the markdown source Excalidraw block to resize.');
+        return false;
+    }
+
+    persistMarkdownImageSourceChange(noteEntry, editorDiv, previewDiv, noteId, newContent);
+
+    return true;
+}
+
+function deleteMarkdownExcalidrawImage(img) {
+    if (!img) return false;
+
+    var noteEntry = img.closest('.noteentry');
+    if (!noteEntry) return false;
+
+    var noteId = noteEntry.id ? noteEntry.id.replace('entry', '') : null;
+    var blockIndex = _mdGetMarkdownExcalidrawBlockIndex(img);
+    if (!noteId || isNaN(blockIndex)) return false;
+
+    var editorDiv = noteEntry.querySelector('.markdown-editor');
+    var previewDiv = noteEntry.querySelector('.markdown-preview');
+    if (!editorDiv) return false;
+
+    var content = typeof getMarkdownContentForNote === 'function'
+        ? getMarkdownContentForNote(noteId)
+        : normalizeContentEditableText(editorDiv);
+    var newContent = _mdDeleteExcalidrawBlockAtIndex(content, blockIndex);
+
+    if (newContent === null) {
+        console.warn('Could not find the markdown source Excalidraw block to delete.');
+        return false;
+    }
+
+    persistMarkdownImageSourceChange(noteEntry, editorDiv, previewDiv, noteId, newContent);
+
+    return true;
+}
+
 /**
  * Toggle a markdown checkbox and update the source content
  * @param {HTMLInputElement} checkbox - The checkbox element that was clicked
@@ -3118,6 +3707,12 @@ window.renderMarkdownEditorContent = renderMarkdownEditorContent;
 window.setupMarkdownEditorListeners = setupMarkdownEditorListeners;
 window.updateViewModeButton = updateViewModeButton;
 window.setupSplitModePreviewUpdate = setupSplitModePreviewUpdate;
+window.toggleMarkdownExcalidrawImageBorder = toggleMarkdownExcalidrawImageBorder;
+window.resizeMarkdownExcalidrawImage = resizeMarkdownExcalidrawImage;
+window.deleteMarkdownExcalidrawImage = deleteMarkdownExcalidrawImage;
+window.toggleMarkdownImageBorder = toggleMarkdownImageBorder;
+window.resizeMarkdownImage = resizeMarkdownImage;
+window.deleteMarkdownImage = deleteMarkdownImage;
 window.toggleMarkdownCheckbox = toggleMarkdownCheckbox;
 window.navigateToEditorLine = navigateToEditorLine;
 window.setupPreviewInteractivity = setupPreviewInteractivity;

@@ -71,13 +71,14 @@ pre.code-block .code-block-delete-btn,
 .code-block-copy-btn,
 pre.code-block .code-block-copy-btn,
 .noteentry pre .code-block-copy-btn {
-    right: 8px;
+    right: 40px;
 }
 
 .code-block-delete-btn,
 pre.code-block .code-block-delete-btn,
 .noteentry pre .code-block-delete-btn {
-    right: 40px;
+    right: 8px;
+    color: #f87171;
 }
 
 .code-block-copy-btn:hover,
@@ -91,7 +92,7 @@ pre.code-block .code-block-delete-btn,
 }
 
 .code-block-delete-btn:hover {
-    color: #d73a49;
+    color: #ef4444;
 }
 
 .code-block-copy-btn:active,
@@ -123,6 +124,10 @@ pre.code-block .code-block-delete-btn,
     opacity: 0.55 !important;
 }
 
+.code-block-actions-host > .code-block-delete-btn {
+    color: #f87171 !important;
+}
+
 .code-block-actions-host > .code-block-copy-btn:hover,
 .code-block-actions-host > .code-block-delete-btn:hover {
     opacity: 1 !important;
@@ -133,7 +138,7 @@ pre.code-block .code-block-delete-btn,
 }
 
 .code-block-actions-host > .code-block-delete-btn:hover {
-    color: #d73a49 !important;
+    color: #ef4444 !important;
 }
 
 .code-block-actions-host > .code-block-copy-btn svg,

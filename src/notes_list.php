@@ -27,8 +27,6 @@ $selected_linked_note_id = isset($_GET['select_linked_note']) ? intval($_GET['se
 ?>
 
 <!-- Notes list display -->
-<div class="notes-list-scrollable-content">
-
 <!-- Search bar container - always visible -->
 <div class="contains_forms_search" id="search-bar-container" style="display: block;">
     <form id="unified-search-form" action="index.php" method="POST">
@@ -61,6 +59,8 @@ $selected_linked_note_id = isset($_GET['select_linked_note']) ? intval($_GET['se
         </div>
     </form>
 </div>
+
+<div class="notes-list-scrollable-content">
 
 <?php
 /**

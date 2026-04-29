@@ -156,6 +156,56 @@ function sanitizeMarkdownExcalidrawContainer($html) {
     return '<div' . $divAttrs . '>' . $childHtml . '</div>';
 }
 
+function normalizeMarkdownImageBorderClass($borderClass) {
+    return in_array($borderClass, ['img-with-border', 'img-with-border-no-padding'], true) ? $borderClass : '';
+}
+
+function getMarkdownImageBorderClassFromAttrBlock($attrs) {
+    $attrText = is_string($attrs) ? $attrs : '';
+    if (preg_match('/(^|\s)\.img-with-border-no-padding(?=\s|$)/', $attrText)) {
+        return 'img-with-border-no-padding';
+    }
+    if (preg_match('/(^|\s)\.img-with-border(?=\s|$)/', $attrText)) {
+        return 'img-with-border';
+    }
+    return '';
+}
+
+function getMarkdownImageWidthFromAttrBlock($attrs) {
+    $attrText = is_string($attrs) ? $attrs : '';
+    if (preg_match('/(?:^|\s)width\s*=\s*(\d+)(?=\s|$)/i', $attrText, $matches)) {
+        return max(1, (int)$matches[1]);
+    }
+    return null;
+}
+
+function buildMarkdownImageTag($alt, $url, $title = '', $attrBlock = '') {
+    $attributes = [
+        'src="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '"',
+        'alt="' . htmlspecialchars($alt, ENT_QUOTES, 'UTF-8') . '"'
+    ];
+
+    if ($title !== '') {
+        $attributes[] = 'title="' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '"';
+    }
+
+    $borderClass = normalizeMarkdownImageBorderClass(getMarkdownImageBorderClassFromAttrBlock($attrBlock));
+    if ($borderClass !== '') {
+        $attributes[] = 'class="' . $borderClass . '"';
+    }
+
+    $imageWidth = getMarkdownImageWidthFromAttrBlock($attrBlock);
+    if (!empty($imageWidth)) {
+        $attributes[] = 'width="' . $imageWidth . '"';
+        $attributes[] = 'style="width: ' . $imageWidth . 'px;"';
+    }
+
+    $attributes[] = 'loading="lazy"';
+    $attributes[] = 'decoding="async"';
+
+    return '<img ' . implode(' ', $attributes) . '>';
+}
+
 function parseMarkdown($text) {
     if (!$text) return '';
     
@@ -230,17 +280,14 @@ function parseMarkdown($text) {
     $protectedElements = [];
     $protectedIndex = 0;
     
-    // Protect images first: ![alt](url "title")
-    $text = preg_replace_callback('/!\[([^\]]*)\]\(([^\s\)]+)(?:\s+"([^"]+)")?\)/', function($matches) use (&$protectedElements, &$protectedIndex) {
+    // Protect images first: ![alt](url "title") with optional {.img-with-border width=320} attributes
+    $text = preg_replace_callback('/!\[([^\]]*)\]\(([^\s\)]+)(?:\s+"([^"]+)")?\)(?:\{((?=[^}]*(?:\.img-with-border(?:-no-padding)?(?=\s|})|\bwidth\s*=))[^}]*)\})?/', function($matches) use (&$protectedElements, &$protectedIndex) {
         $alt = $matches[1];
         $url = $matches[2];
         $title = isset($matches[3]) ? $matches[3] : '';
+        $attrBlock = isset($matches[4]) ? $matches[4] : '';
         $placeholder = "\x00PIMG" . $protectedIndex . "\x00";
-        if ($title) {
-            $imgTag = '<img src="' . htmlspecialchars($url) . '" alt="' . htmlspecialchars($alt) . '" title="' . htmlspecialchars($title) . '">';
-        } else {
-            $imgTag = '<img src="' . htmlspecialchars($url) . '" alt="' . htmlspecialchars($alt) . '">';
-        }
+        $imgTag = buildMarkdownImageTag($alt, $url, $title, $attrBlock);
         $protectedElements[$protectedIndex] = $imgTag;
         $protectedIndex++;
         return $placeholder;

@@ -729,9 +729,7 @@ body.dark-mode #deleteConfirmModal .btn-cancel,
 html[data-theme='dark'] #emptyTrashConfirmModal .btn-cancel,
 body.dark-mode #emptyTrashConfirmModal .btn-cancel,
 html[data-theme='dark'] #restoreConfirmModal .btn-cancel,
-body.dark-mode #restoreConfirmModal .btn-cancel,
-html[data-theme='dark'] #deleteAttachmentConfirmModal .btn-cancel,
-body.dark-mode #deleteAttachmentConfirmModal .btn-cancel {
+body.dark-mode #restoreConfirmModal .btn-cancel {
     background-color: #e04b4b !important;
     color: #fff !important;
     border-color: #e04b4b !important;
@@ -748,9 +746,7 @@ body.dark-mode #deleteConfirmModal .btn-cancel:hover,
 html[data-theme='dark'] #emptyTrashConfirmModal .btn-cancel:hover,
 body.dark-mode #emptyTrashConfirmModal .btn-cancel:hover,
 html[data-theme='dark'] #restoreConfirmModal .btn-cancel:hover,
-body.dark-mode #restoreConfirmModal .btn-cancel:hover,
-html[data-theme='dark'] #deleteAttachmentConfirmModal .btn-cancel:hover,
-body.dark-mode #deleteAttachmentConfirmModal .btn-cancel:hover {
+body.dark-mode #restoreConfirmModal .btn-cancel:hover {
     background-color: #c43b3b !important;
     border-color: #c43b3b !important;
 }

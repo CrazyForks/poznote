@@ -331,7 +331,9 @@ function _updateUIAfterSave(timeText, titleChanged) {
     // to prevent race conditions where an event might re-trigger the indicator
     var elements = getNoteElements(noteid);
     if (elements.entry) {
-        lastSavedContent = elements.entry.innerHTML;
+        lastSavedContent = (typeof window.getComparableNoteContent === 'function')
+            ? window.getComparableNoteContent(elements.entry, noteid)
+            : elements.entry.innerHTML;
     }
     if (elements.title) {
         lastSavedTitle = elements.title.value;
