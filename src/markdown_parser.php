@@ -69,6 +69,10 @@ function restoreMarkdownBackslashEscapes($html, $protectedEscapes) {
     }, $html);
 }
 
+function trimMarkdownTableWhitespace($text) {
+    return trim((string)$text, " \t\n\r\v");
+}
+
 function renderMarkdownMermaidBlock($source) {
     $mermaidSource = trim(html_entity_decode((string)$source, ENT_QUOTES, 'UTF-8'));
     $escapedSource = htmlspecialchars($mermaidSource, ENT_QUOTES, 'UTF-8');
@@ -986,7 +990,7 @@ function parseMarkdown($text) {
             
             // Collect all consecutive table rows
             while ($i < count($lines) && preg_match('/^\s*\|/', $lines[$i])) {
-                $currentLine = trim($lines[$i]);
+                $currentLine = trimMarkdownTableWhitespace($lines[$i]);
                 
                 // Check if this is a header separator line (|---|---|)
                 if (preg_match('/^\|[\s\-:|]+\|$/', $currentLine)) {
@@ -997,7 +1001,7 @@ function parseMarkdown($text) {
 
                 $logicalRow = $currentLine;
                 while (!preg_match('/\|\s*$/', $logicalRow) && $i + 1 < count($lines)) {
-                    $nextLine = trim($lines[$i + 1]);
+                    $nextLine = trimMarkdownTableWhitespace($lines[$i + 1]);
 
                     if ($nextLine === '') {
                         break;
@@ -1008,7 +1012,7 @@ function parseMarkdown($text) {
                 }
                 
                 // Parse table cells
-                $cells = array_map('trim', array_slice(explode('|', $logicalRow), 1, -1));
+                $cells = array_map('trimMarkdownTableWhitespace', array_slice(explode('|', $logicalRow), 1, -1));
                 $tableRows[] = $cells;
                 $i++;
             }
