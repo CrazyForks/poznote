@@ -6,8 +6,20 @@
 (function () {
     'use strict';
 
+    function getForcedTheme() {
+        return window.__poznoteForcedTheme === 'dark' || window.__poznoteForcedTheme === 'light'
+            ? window.__poznoteForcedTheme
+            : null;
+    }
+
     // Initialize theme on page load
     function initTheme() {
+        var forcedTheme = getForcedTheme();
+        if (forcedTheme) {
+            applyTheme(forcedTheme, false);
+            return;
+        }
+
         var savedTheme = localStorage.getItem('poznote-theme');
         var themeToApply = savedTheme;
 
@@ -42,6 +54,12 @@
     // save: boolean, whether to save to localStorage
     function applyTheme(theme, save) {
         var root = document.documentElement;
+        var forcedTheme = getForcedTheme();
+        if (forcedTheme) {
+            theme = forcedTheme;
+            save = false;
+        }
+
         var themeToApply = theme;
 
         if (theme === 'system') {
@@ -138,6 +156,9 @@
 
     // Get current theme mode (light, dark, or system)
     function getCurrentThemeMode() {
+        var forcedTheme = getForcedTheme();
+        if (forcedTheme) return forcedTheme;
+
         return localStorage.getItem('poznote-theme') || 'system';
     }
 

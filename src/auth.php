@@ -257,6 +257,11 @@ function buildPublicWorkspaceRegistryKey(string $workspaceName): string {
     return $normalizedWorkspaceName !== '' ? 'workspace:' . $normalizedWorkspaceName : '';
 }
 
+function normalizePublicWorkspaceTheme($theme): ?string {
+    $theme = strtolower(trim((string)$theme));
+    return in_array($theme, ['dark', 'light'], true) ? $theme : null;
+}
+
 function getPublicWorkspaceAccess(): ?array {
     $access = $_SESSION['public_workspace_access'] ?? null;
     if (!is_array($access)) {
@@ -278,6 +283,11 @@ function getPublicWorkspaceAccess(): ?array {
 function getPublicWorkspaceName(): ?string {
     $access = getPublicWorkspaceAccess();
     return $access['workspace_name'] ?? null;
+}
+
+function getPublicWorkspaceTheme(): ?string {
+    $access = getPublicWorkspaceAccess();
+    return $access !== null ? normalizePublicWorkspaceTheme($access['theme'] ?? null) : null;
 }
 
 function isPublicWorkspaceAccessActive(): bool {
@@ -336,7 +346,7 @@ function resolvePublicWorkspaceAccess(string $workspaceName): ?array {
         $userCon->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $userCon->exec('PRAGMA busy_timeout = 5000');
 
-        $stmt = $userCon->prepare('SELECT id, workspace_name, password, login_required, allowed_users FROM shared_workspaces WHERE id = ? LIMIT 1');
+        $stmt = $userCon->prepare('SELECT * FROM shared_workspaces WHERE id = ? LIMIT 1');
         $stmt->execute([$targetId]);
         $sharedWorkspace = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$sharedWorkspace) {
@@ -360,6 +370,7 @@ function resolvePublicWorkspaceAccess(string $workspaceName): ?array {
             'workspace_name' => $resolvedWorkspaceName,
             'target_id' => $targetId,
             'registry_key' => $registryKey,
+            'theme' => normalizePublicWorkspaceTheme($sharedWorkspace['theme'] ?? null),
             'password' => $sharedWorkspace['password'] ?? null,
             'login_required' => !empty($sharedWorkspace['login_required']),
             'allowed_users' => $sharedWorkspace['allowed_users'] ?? null,
@@ -444,6 +455,7 @@ function renderPublicWorkspaceLoginRequiredPage(array $workspaceAccess): void {
         'status' => 403,
         'title' => t_h('public.login_required_title', [], 'Login Required', $currentLang),
         'message' => t_h('public.login_required_message', [], 'This content is restricted to specific users. Please log in to access it.', $currentLang),
+        'theme' => normalizePublicWorkspaceTheme($workspaceAccess['theme'] ?? null),
         'actions' => [
             [
                 'href' => '/login.php?redirect=' . rawurlencode($redirect),
@@ -453,13 +465,14 @@ function renderPublicWorkspaceLoginRequiredPage(array $workspaceAccess): void {
     ]);
 }
 
-function renderPublicWorkspaceAccessDeniedPage(): void {
+function renderPublicWorkspaceAccessDeniedPage(array $workspaceAccess = []): void {
     $currentLang = loadPublicWorkspacePageHelpers();
 
     renderPublicStatusPage($currentLang, [
         'status' => 403,
         'title' => t_h('public.access_denied_title', [], 'Access Denied', $currentLang),
         'message' => t_h('public.access_denied_message', [], 'You do not have permission to view this content.', $currentLang),
+        'theme' => normalizePublicWorkspaceTheme($workspaceAccess['theme'] ?? null),
         'actions' => [
             [
                 'href' => '/index.php',
@@ -482,6 +495,7 @@ function renderPublicWorkspacePasswordPage(array $workspaceAccess, bool $passwor
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="robots" content="noindex, nofollow">
         <title><?php echo t_h('public.protection.title', [], 'Password Protected', $currentLang); ?></title>
+        <?php if (function_exists('renderPublicForcedThemeScript')) renderPublicForcedThemeScript($workspaceAccess['theme'] ?? null); ?>
         <script src="<?php echo htmlspecialchars($themeInitHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>"></script>
         <link rel="stylesheet" href="<?php echo htmlspecialchars($stylesheetHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
     </head>
@@ -523,7 +537,7 @@ function authorizePublicWorkspaceRequest(array $workspaceAccess): bool {
     }
 
     if (!empty($allowedUserIds) && $currentUserId !== $ownerId && !in_array($currentUserId, $allowedUserIds, true)) {
-        renderPublicWorkspaceAccessDeniedPage();
+        renderPublicWorkspaceAccessDeniedPage($workspaceAccess);
     }
 
     return true;
@@ -578,6 +592,7 @@ function activatePublicWorkspaceAccess(array $workspaceAccess): void {
         'workspace_name' => $workspaceName,
         'target_id' => (int)($workspaceAccess['target_id'] ?? 0),
         'registry_key' => (string)($workspaceAccess['registry_key'] ?? ''),
+        'theme' => normalizePublicWorkspaceTheme($workspaceAccess['theme'] ?? null),
         'activated_at' => time(),
     ];
 }
