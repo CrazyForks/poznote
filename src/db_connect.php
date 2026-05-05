@@ -229,6 +229,7 @@ try {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         workspace_name TEXT UNIQUE NOT NULL,
         token TEXT UNIQUE NOT NULL,
+        theme TEXT,
         password TEXT,
         login_required INTEGER DEFAULT 0,
         allowed_users TEXT,
@@ -249,7 +250,7 @@ try {
     )');
 
     // --- Schema versioning: skip migrations & indexes if already up to date ---
-    $CURRENT_SCHEMA_VERSION = 9;
+    $CURRENT_SCHEMA_VERSION = 10;
     $currentVersion = 0;
     try {
         $svStmt = $con->query("SELECT value FROM settings WHERE key = 'schema_version'");
@@ -343,6 +344,9 @@ try {
             if (!in_array('password', $existingColumns)) {
                 $con->exec("ALTER TABLE shared_workspaces ADD COLUMN password TEXT");
             }
+            if (!in_array('theme', $existingColumns)) {
+                $con->exec("ALTER TABLE shared_workspaces ADD COLUMN theme TEXT");
+            }
             if (!in_array('login_required', $existingColumns)) {
                 $con->exec("ALTER TABLE shared_workspaces ADD COLUMN login_required INTEGER DEFAULT 0");
             }
@@ -422,7 +426,7 @@ try {
         $con->exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('markdown_split_card_view', '1')");
 
         // === Update schema version ===
-        $con->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '8')");
+        $con->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '10')");
     }
     // --- End schema versioning ---
 

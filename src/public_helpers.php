@@ -42,6 +42,20 @@ function escapePublicStatusText($text) {
     return htmlspecialchars($decoded, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function normalizePublicForcedTheme($theme): ?string {
+    $theme = strtolower(trim((string)$theme));
+    return in_array($theme, ['dark', 'light'], true) ? $theme : null;
+}
+
+function renderPublicForcedThemeScript($theme): void {
+    $theme = normalizePublicForcedTheme($theme);
+    if ($theme === null) {
+        return;
+    }
+
+    echo '<script>window.__poznoteForcedTheme=' . json_encode($theme, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ';</script>' . "\n";
+}
+
 function getPublicHtmlAttributeValue(string $attrs, string $name): string {
     $pattern = '/(?:^|\s)' . preg_quote($name, '/') . '\s*=\s*(["\'])(.*?)\1/is';
     if (!preg_match($pattern, $attrs, $matches)) {
@@ -126,6 +140,7 @@ function renderPublicStatusPage($currentLang, array $options = []) {
     $message = $options['message'] ?? '';
     $hint = $options['hint'] ?? '';
     $actions = $options['actions'] ?? [];
+    $forcedTheme = normalizePublicForcedTheme($options['theme'] ?? null);
     ?>
     <!doctype html>
     <html lang="<?php echo htmlspecialchars($currentLang, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
@@ -134,6 +149,7 @@ function renderPublicStatusPage($currentLang, array $options = []) {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="robots" content="noindex, nofollow">
         <title><?php echo escapePublicStatusText($title); ?> - Poznote</title>
+        <?php renderPublicForcedThemeScript($forcedTheme); ?>
         <script src="<?php echo htmlspecialchars($themeInitHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>"></script>
         <link rel="stylesheet" href="<?php echo htmlspecialchars($statusStylesheetHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
     </head>

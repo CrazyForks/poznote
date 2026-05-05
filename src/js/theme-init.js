@@ -1,8 +1,9 @@
 // Theme initialization - runs synchronously in <head> to prevent FOUC
 (function () {
     try {
-        var t = localStorage.getItem('poznote-theme');
-        if (!t) {
+        var forcedTheme = window.__poznoteForcedTheme;
+        var t = (forcedTheme === 'dark' || forcedTheme === 'light') ? forcedTheme : localStorage.getItem('poznote-theme');
+        if (!t || t === 'system') {
             t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
         }
         var r = document.documentElement;

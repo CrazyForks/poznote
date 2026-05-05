@@ -148,6 +148,8 @@ if ($width_value !== false && $width_value !== '' && $width_value !== '0' && $wi
     }
 }
 
+$forcedPublicWorkspaceTheme = function_exists('getPublicWorkspaceTheme') ? getPublicWorkspaceTheme() : null;
+
 ?>
 
 <!DOCTYPE html>
@@ -170,6 +172,9 @@ if ($width_value !== false && $width_value !== '' && $width_value !== '0' && $wi
     <link rel="manifest" href="pwa/manifest.webmanifest?v=<?php echo $v; ?>">
     <link rel="icon" href="favicon.ico" sizes="512x512" type="image/png">
     <link rel="apple-touch-icon" href="pwa/poznote.png?v=<?php echo $v; ?>">
+    <?php if ($forcedPublicWorkspaceTheme !== null): ?>
+    <script>window.__poznoteForcedTheme = <?php echo json_encode($forcedPublicWorkspaceTheme, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;</script>
+    <?php endif; ?>
     <script src="js/theme-init.js?v=<?php echo $v; ?>"></script>
     <script>
         (function () {

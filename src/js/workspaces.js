@@ -573,6 +573,23 @@ function setCachedWorkspaceSharePassword(button, password) {
     }
 }
 
+function getCurrentWorkspaceShareTheme() {
+    if (typeof window.getCurrentTheme === 'function') {
+        var currentTheme = window.getCurrentTheme();
+        if (currentTheme === 'dark' || currentTheme === 'light') return currentTheme;
+    }
+
+    var documentTheme = document.documentElement ? document.documentElement.getAttribute('data-theme') : '';
+    if (documentTheme === 'dark' || documentTheme === 'light') return documentTheme;
+
+    try {
+        var storedTheme = localStorage.getItem('poznote-theme');
+        return storedTheme === 'dark' ? 'dark' : 'light';
+    } catch (e) {
+        return 'light';
+    }
+}
+
 function updateWorkspaceShareToggleButton(button, isShared, shareState) {
     if (!button) return;
 
@@ -596,6 +613,7 @@ function updateWorkspaceShareToggleButton(button, isShared, shareState) {
         button.setAttribute('data-has-password', shareState.hasPassword ? '1' : '0');
         button.setAttribute('data-login-required', shareState.loginRequired ? '1' : '0');
         button.setAttribute('data-allowed-users', JSON.stringify(shareState.allowed_users || []));
+        button.setAttribute('data-theme', shareState.theme || '');
     }
 
     if (!isShared || !shareState || !shareState.hasPassword) {
@@ -922,6 +940,7 @@ function showWorkspaceShareOptionsModal(button) {
         shareBtn.disabled = true;
         submitWorkspaceShareToggle(button, {
             password: passwordValue,
+            theme: getCurrentWorkspaceShareTheme(),
             login_required: loginCheckbox.checked,
             allowed_users: loginCheckbox.checked && specificUsersCheckbox.checked ? selectedUserIds.slice() : []
         }).then(function (json) {
@@ -998,6 +1017,9 @@ function submitWorkspaceShareToggle(button, options) {
     }
     if (options && Object.prototype.hasOwnProperty.call(options, 'allowed_users')) {
         params.set('allowed_users', JSON.stringify(options.allowed_users || []));
+    }
+    if (options && Object.prototype.hasOwnProperty.call(options, 'theme')) {
+        params.set('theme', options.theme === 'dark' ? 'dark' : 'light');
     }
 
     return fetch('workspaces.php', {
@@ -1212,7 +1234,8 @@ function handleWorkspaceReadonlyShareSave(e) {
 
     var params = new URLSearchParams({
         action: 'upsert_readonly_share',
-        name: workspaceName
+        name: workspaceName,
+        theme: getCurrentWorkspaceShareTheme()
     });
 
     fetch('workspaces.php', {
