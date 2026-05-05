@@ -36,13 +36,38 @@ if ($_POST) {
                     $scriptDir = '';
                 }
 
-                return getProtocol() . '://' . $host . $scriptDir . '/index.php?workspace=' . rawurlencode($workspaceName);
+                return getProtocol() . '://' . $host . $scriptDir . '/index.php?workspace=' . rawurlencode($workspaceName) . '&public_workspace=1';
             }
         }
 
         if (!function_exists('buildWorkspaceShareRegistryKey')) {
             function buildWorkspaceShareRegistryKey(string $workspaceName): string {
                 return buildPublicWorkspaceRegistryKey($workspaceName);
+            }
+        }
+
+        if (!function_exists('sanitizeWorkspaceShareAllowedUsers')) {
+            function sanitizeWorkspaceShareAllowedUsers($rawValue): array {
+                if (is_string($rawValue)) {
+                    $rawValue = trim($rawValue);
+                    if ($rawValue === '') {
+                        return [];
+                    }
+                    $decoded = json_decode($rawValue, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $rawValue = $decoded;
+                    } else {
+                        $rawValue = array_filter(array_map('trim', explode(',', $rawValue)));
+                    }
+                }
+
+                if (!is_array($rawValue)) {
+                    return [];
+                }
+
+                return array_values(array_unique(array_filter(array_map('intval', $rawValue), function ($id) {
+                    return $id > 0;
+                })));
             }
         }
 
@@ -485,7 +510,7 @@ if ($_POST) {
 
             require_once __DIR__ . '/users/db_master.php';
 
-            $shareStmt = $con->prepare('SELECT id, token FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
+            $shareStmt = $con->prepare('SELECT id, token, password, login_required, allowed_users FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
             $shareStmt->execute([$name]);
             $existingShare = $shareStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
@@ -493,16 +518,37 @@ if ($_POST) {
             $oldToken = $existingShare['token'] ?? null;
             $token = buildWorkspaceShareRegistryKey($name);
 
+            $passwordProvided = array_key_exists('password', $_POST);
+            $password = $passwordProvided ? trim((string)($_POST['password'] ?? '')) : '';
+            $hashedPassword = $passwordProvided
+                ? ($password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null)
+                : ($existingShare['password'] ?? null);
+
+            $accessOptionsProvided = array_key_exists('login_required', $_POST) || array_key_exists('allowed_users', $_POST);
+            if ($accessOptionsProvided) {
+                $rawLoginRequired = strtolower(trim((string)($_POST['login_required'] ?? '0')));
+                $loginRequired = in_array($rawLoginRequired, ['1', 'true', 'yes', 'on'], true);
+                $allowedUserIds = sanitizeWorkspaceShareAllowedUsers($_POST['allowed_users'] ?? []);
+                if (!empty($allowedUserIds)) {
+                    $loginRequired = true;
+                }
+                $allowedUsersJson = !empty($allowedUserIds) ? json_encode($allowedUserIds) : null;
+            } else {
+                $loginRequired = !empty($existingShare['login_required']);
+                $allowedUsersJson = $existingShare['allowed_users'] ?? null;
+                $allowedUserIds = !empty($allowedUsersJson) ? sanitizeWorkspaceShareAllowedUsers($allowedUsersJson) : [];
+            }
+
             if (!isTokenAvailable($token, (int)$_SESSION['user_id'], 'workspace', $shareId)) {
                 throw new Exception(t('workspaces.share.errors.url_in_use', [], 'A public workspace with this name already exists on this Poznote instance', $currentLang));
             }
 
             if ($existingShare) {
-                $updateShare = $con->prepare('UPDATE shared_workspaces SET token = ?, created = CURRENT_TIMESTAMP WHERE workspace_name = ?');
-                $updateShare->execute([$token, $name]);
+                $updateShare = $con->prepare('UPDATE shared_workspaces SET token = ?, password = ?, login_required = ?, allowed_users = ?, created = CURRENT_TIMESTAMP WHERE workspace_name = ?');
+                $updateShare->execute([$token, $hashedPassword, $loginRequired ? 1 : 0, $allowedUsersJson, $name]);
             } else {
-                $insertShare = $con->prepare('INSERT INTO shared_workspaces (workspace_name, token) VALUES (?, ?)');
-                $insertShare->execute([$name, $token]);
+                $insertShare = $con->prepare('INSERT INTO shared_workspaces (workspace_name, token, password, login_required, allowed_users) VALUES (?, ?, ?, ?, ?)');
+                $insertShare->execute([$name, $token, $hashedPassword, $loginRequired ? 1 : 0, $allowedUsersJson]);
 
                 $shareLookup = $con->prepare('SELECT id FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
                 $shareLookup->execute([$name]);
@@ -525,6 +571,9 @@ if ($_POST) {
                     'success' => true,
                     'public' => true,
                     'url' => $publicUrl,
+                    'hasPassword' => !empty($hashedPassword),
+                    'loginRequired' => $loginRequired,
+                    'allowed_users' => !empty($allowedUserIds) ? $allowedUserIds : null,
                     'message' => $message,
                 ]);
                 exit;
@@ -577,7 +626,7 @@ if (!function_exists('buildWorkspaceSharePublicUrl')) {
             $scriptDir = '';
         }
 
-        return getProtocol() . '://' . $host . $scriptDir . '/index.php?workspace=' . rawurlencode($workspaceName);
+        return getProtocol() . '://' . $host . $scriptDir . '/index.php?workspace=' . rawurlencode($workspaceName) . '&public_workspace=1';
     }
 }
 
@@ -590,14 +639,18 @@ if (!function_exists('buildWorkspaceShareRegistryKey')) {
 // Read existing workspaces and share state
 $workspaces = [];
 $workspaceRows = [];
-$stmt = $con->query('SELECT w.name, sw.token AS readonly_token FROM workspaces w LEFT JOIN shared_workspaces sw ON sw.workspace_name = w.name ORDER BY w.name');
+$stmt = $con->query('SELECT w.name, sw.token AS readonly_token, sw.password AS readonly_password, sw.login_required AS readonly_login_required, sw.allowed_users AS readonly_allowed_users FROM workspaces w LEFT JOIN shared_workspaces sw ON sw.workspace_name = w.name ORDER BY w.name');
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $workspaceName = $row['name'];
     $readonlyToken = $row['readonly_token'] ?? '';
+    $readonlyAllowedUsers = !empty($row['readonly_allowed_users']) ? json_decode($row['readonly_allowed_users'], true) : null;
     $workspaceRows[] = [
         'name' => $workspaceName,
         'readonly_token' => $readonlyToken,
         'readonly_url' => $readonlyToken !== '' ? buildWorkspaceSharePublicUrl($workspaceName) : '',
+        'readonly_has_password' => !empty($row['readonly_password']),
+        'readonly_login_required' => !empty($row['readonly_login_required']),
+        'readonly_allowed_users' => is_array($readonlyAllowedUsers) ? array_values(array_map('intval', $readonlyAllowedUsers)) : [],
     ];
     $workspaces[] = $workspaceName;
 }
@@ -654,15 +707,25 @@ try {
 </head>
 <body data-workspaces="<?php echo htmlspecialchars(json_encode($workspaces, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP), ENT_QUOTES, 'UTF-8'); ?>"
       data-workspace="<?php echo htmlspecialchars($pageWorkspace, ENT_QUOTES, 'UTF-8'); ?>"
+    data-current-user-id="<?php echo (int)($_SESSION['user_id'] ?? 0); ?>"
       data-txt-last-opened="<?php echo htmlspecialchars(t('workspaces.default.last_opened', [], 'Last workspace opened', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
     data-txt-workspace-share-enabled="<?php echo htmlspecialchars(t('workspaces.share.status.enabled', [], 'Public read-only enabled', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
     data-txt-workspace-share-disabled="<?php echo htmlspecialchars(t('workspaces.share.status.disabled', [], 'Not shared publicly', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
     data-txt-workspace-share-enable-btn="<?php echo htmlspecialchars(t('workspaces.share.actions.enable', [], 'Share', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-edit-btn="<?php echo htmlspecialchars(t('workspaces.share.actions.edit', [], 'Edit share', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
     data-txt-workspace-share-open-btn="<?php echo htmlspecialchars(t('public.actions.open', [], 'Open public view', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
-    data-txt-workspace-share-copy-btn="<?php echo htmlspecialchars(t('public.actions.copy_url', [], 'Copy URL', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-copy-btn="<?php echo htmlspecialchars(t('workspaces.share.actions.copy_link', [], 'Copy share link', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
     data-txt-workspace-share-disable-btn="<?php echo htmlspecialchars(t('workspaces.share.actions.disable', [], 'Unshare', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
-    data-txt-workspace-share-copy-success="<?php echo htmlspecialchars(t('public.actions.url_copied', [], 'URL copied!', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-copy-success="<?php echo htmlspecialchars(t('workspaces.share.messages.url_copied', [], 'Share link copied to clipboard!', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-copy-failed="<?php echo htmlspecialchars(t('workspaces.share.errors.copy_failed', [], 'Failed to copy share link', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
     data-txt-workspace-share-help="<?php echo htmlspecialchars(t('workspaces.share.help', [], 'Anyone with this URL opens Poznote directly on this workspace in read-only mode.', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-workspace-share-password-label="<?php echo htmlspecialchars(t('index.public_modal.password', [], 'Password (optional)', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-workspace-share-password-placeholder="<?php echo htmlspecialchars(t('index.public_modal.password_placeholder', [], 'Enter a password', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-workspace-share-require-login="<?php echo htmlspecialchars(t('workspaces.share.options.require_login', [], 'Require Poznote login', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-workspace-share-restrict-users="<?php echo htmlspecialchars(t('public.restrict_users', [], 'Restrict to specific users', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-workspace-share-users-loading="<?php echo htmlspecialchars(t('public.users_loading', [], 'Loading users...', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-workspace-share-no-users="<?php echo htmlspecialchars(t('public.no_users_found', [], 'No other users found', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-workspace-share-cancel="<?php echo htmlspecialchars(t('common.cancel', [], 'Cancel', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
       <?php if (!empty($clearSelectedWorkspace) && !$isAjax): ?>
       data-clear-workspace="<?php echo htmlspecialchars(json_encode($workspaces[0] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
       <?php endif; ?>>
@@ -740,11 +803,16 @@ try {
                                 </div>
                                 <div class="ws-col ws-col-share">
                                     <button type="button"
-                                            class="btn action-btn btn-share-toggle <?php echo $workspaceReadonlyEnabled ? 'btn-danger' : 'btn-success'; ?>"
+                                            class="btn action-btn btn-share-toggle btn-success"
                                             data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>"
-                                            data-action="<?php echo $workspaceReadonlyEnabled ? 'disable_readonly_share' : 'upsert_readonly_share'; ?>">
+                                            data-shared="<?php echo $workspaceReadonlyEnabled ? '1' : '0'; ?>"
+                                            data-url="<?php echo htmlspecialchars((string)($workspaceRow['readonly_url'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                            data-has-password="<?php echo !empty($workspaceRow['readonly_has_password']) ? '1' : '0'; ?>"
+                                            data-login-required="<?php echo !empty($workspaceRow['readonly_login_required']) ? '1' : '0'; ?>"
+                                            data-allowed-users="<?php echo htmlspecialchars(json_encode($workspaceRow['readonly_allowed_users'] ?? [], JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP), ENT_QUOTES, 'UTF-8'); ?>"
+                                            data-action="upsert_readonly_share">
                                         <?php echo $workspaceReadonlyEnabled
-                                            ? t_h('workspaces.share.actions.disable', [], 'Unshare', $currentLang)
+                                            ? t_h('workspaces.share.actions.edit', [], 'Edit share', $currentLang)
                                             : t_h('workspaces.share.actions.enable', [], 'Share', $currentLang); ?>
                                     </button>
                                 </div>

@@ -447,12 +447,23 @@
       "share": {
         "actions": {
           "enable": "Share",
+          "edit": "Edit share",
+          "copy_link": "Copy share link",
           "disable": "Unshare"
         },
         "confirm": {
           "title": "Share workspace",
           "message": "Anyone with the URL for workspace \"{{workspace}}\" will have access to all notes and folders in this workspace.\n\nThey will not be able to modify anything. They will only be able to view the content.",
           "confirm_button": "Share workspace"
+        },
+        "messages": {
+          "url_copied": "Share link copied to clipboard!"
+        },
+        "errors": {
+          "copy_failed": "Failed to copy share link"
+        },
+        "options": {
+          "require_login": "Require Poznote login"
         }
       }
     },
@@ -1418,6 +1429,7 @@
       "title": "Password Protected",
       "note_heading": "Password Protected",
       "folder_heading": "Password Protected Folder",
+      "workspace_heading": "Password Protected Workspace",
       "error_incorrect": "Incorrect password. Please try again.",
       "additional_password_required": "This note requires an additional password. Please enter the next password to continue.",
       "placeholder": "Enter password",

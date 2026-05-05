@@ -336,7 +336,7 @@ function resolvePublicWorkspaceAccess(string $workspaceName): ?array {
         $userCon->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $userCon->exec('PRAGMA busy_timeout = 5000');
 
-        $stmt = $userCon->prepare('SELECT id, workspace_name FROM shared_workspaces WHERE id = ? LIMIT 1');
+        $stmt = $userCon->prepare('SELECT id, workspace_name, password, login_required, allowed_users FROM shared_workspaces WHERE id = ? LIMIT 1');
         $stmt->execute([$targetId]);
         $sharedWorkspace = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$sharedWorkspace) {
@@ -360,10 +360,200 @@ function resolvePublicWorkspaceAccess(string $workspaceName): ?array {
             'workspace_name' => $resolvedWorkspaceName,
             'target_id' => $targetId,
             'registry_key' => $registryKey,
+            'password' => $sharedWorkspace['password'] ?? null,
+            'login_required' => !empty($sharedWorkspace['login_required']),
+            'allowed_users' => $sharedWorkspace['allowed_users'] ?? null,
         ];
     } catch (Exception $e) {
         error_log('Poznote public workspace access failed: ' . $e->getMessage());
         return null;
+    }
+}
+
+function isExplicitPublicWorkspaceRequest(): bool {
+    $value = $_GET['public_workspace'] ?? $_POST['public_workspace'] ?? null;
+    return is_string($value) && in_array(strtolower(trim($value)), ['1', 'true', 'yes'], true);
+}
+
+function isRealUserAuthenticated(): bool {
+    if (!isAuthenticated()) {
+        return false;
+    }
+
+    if (($_SESSION['auth_method'] ?? '') === 'public_workspace') {
+        return false;
+    }
+
+    $user = $_SESSION['user'] ?? null;
+    return !(is_array($user) && !empty($user['_public_workspace']));
+}
+
+function getCurrentRelativeRequestUri(): string {
+    $requestUri = (string)($_SERVER['REQUEST_URI'] ?? 'index.php');
+    if ($requestUri === '' || preg_match('#^[a-zA-Z][a-zA-Z0-9+.-]*://#', $requestUri) || str_starts_with($requestUri, '//')) {
+        return 'index.php';
+    }
+
+    return $requestUri;
+}
+
+function getPublicWorkspacePasswordSessionKey(array $workspaceAccess): string {
+    $registryKey = (string)($workspaceAccess['registry_key'] ?? '');
+    return 'public_workspace_auth_' . hash('sha256', $registryKey);
+}
+
+function buildExplicitPublicWorkspaceUrl(string $workspaceName): string {
+    return 'index.php?workspace=' . urlencode($workspaceName) . '&public_workspace=1';
+}
+
+function decodePublicWorkspaceAllowedUsers($allowedUsersRaw): array {
+    if (empty($allowedUsersRaw)) {
+        return [];
+    }
+
+    $decoded = is_array($allowedUsersRaw) ? $allowedUsersRaw : json_decode((string)$allowedUsersRaw, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    return array_values(array_unique(array_filter(array_map('intval', $decoded), function ($id) {
+        return $id > 0;
+    })));
+}
+
+function loadPublicWorkspacePageHelpers(): string {
+    if (!function_exists('t_h')) {
+        require_once __DIR__ . '/functions.php';
+    }
+    if (!function_exists('renderPublicStatusPage')) {
+        require_once __DIR__ . '/public_helpers.php';
+    }
+
+    return function_exists('getUserLanguage') ? getUserLanguage() : 'en';
+}
+
+function renderPublicWorkspaceLoginRequiredPage(array $workspaceAccess): void {
+    $currentLang = loadPublicWorkspacePageHelpers();
+    $redirect = getCurrentRelativeRequestUri();
+    if (strpos($redirect, 'public_workspace=') === false) {
+        $redirect .= (strpos($redirect, '?') === false ? '?' : '&') . 'public_workspace=1';
+    }
+    $_SESSION['post_login_redirect'] = $redirect;
+
+    renderPublicStatusPage($currentLang, [
+        'status' => 403,
+        'title' => t_h('public.login_required_title', [], 'Login Required', $currentLang),
+        'message' => t_h('public.login_required_message', [], 'This content is restricted to specific users. Please log in to access it.', $currentLang),
+        'actions' => [
+            [
+                'href' => '/login.php?redirect=' . rawurlencode($redirect),
+                'label' => t_h('common.login.button', [], 'Log in', $currentLang),
+            ],
+        ],
+    ]);
+}
+
+function renderPublicWorkspaceAccessDeniedPage(): void {
+    $currentLang = loadPublicWorkspacePageHelpers();
+
+    renderPublicStatusPage($currentLang, [
+        'status' => 403,
+        'title' => t_h('public.access_denied_title', [], 'Access Denied', $currentLang),
+        'message' => t_h('public.access_denied_message', [], 'You do not have permission to view this content.', $currentLang),
+        'actions' => [
+            [
+                'href' => '/index.php',
+                'label' => t_h('common.back_to_home', [], 'Go to Dashboard', $currentLang),
+            ],
+        ],
+    ]);
+}
+
+function renderPublicWorkspacePasswordPage(array $workspaceAccess, bool $passwordError = false): void {
+    $currentLang = loadPublicWorkspacePageHelpers();
+    $stylesheetHref = getVersionedPublicAppAssetHref('css/public_folder.css');
+    $themeInitHref = getVersionedPublicAppAssetHref('js/theme-init.js');
+    $workspaceName = (string)($workspaceAccess['workspace_name'] ?? '');
+    ?>
+    <!doctype html>
+    <html lang="<?php echo htmlspecialchars($currentLang, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noindex, nofollow">
+        <title><?php echo t_h('public.protection.title', [], 'Password Protected', $currentLang); ?></title>
+        <script src="<?php echo htmlspecialchars($themeInitHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>"></script>
+        <link rel="stylesheet" href="<?php echo htmlspecialchars($stylesheetHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+    </head>
+    <body class="password-page-body">
+        <div class="password-container">
+            <h2><?php echo t_h('public.protection.workspace_heading', [], 'Password Protected Workspace', $currentLang); ?></h2>
+            <?php if ($passwordError): ?>
+                <div class="error"><?php echo t_h('public.protection.error_incorrect', [], 'Incorrect password. Please try again.', $currentLang); ?></div>
+            <?php endif; ?>
+            <form method="POST" class="password-form">
+                <input type="hidden" name="workspace" value="<?php echo htmlspecialchars($workspaceName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
+                <input type="hidden" name="public_workspace" value="1">
+                <input type="password" name="workspace_password" placeholder="<?php echo t_h('public.protection.placeholder', [], 'Enter password', $currentLang); ?>" required autofocus>
+                <button type="submit"><?php echo t_h('public.protection.unlock', [], 'Unlock', $currentLang); ?></button>
+            </form>
+        </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
+function authorizePublicWorkspaceRequest(array $workspaceAccess): bool {
+    $allowedUserIds = decodePublicWorkspaceAllowedUsers($workspaceAccess['allowed_users'] ?? null);
+    $loginRequired = !empty($workspaceAccess['login_required']) || !empty($allowedUserIds);
+
+    if (!$loginRequired) {
+        return false;
+    }
+
+    if (!isRealUserAuthenticated()) {
+        renderPublicWorkspaceLoginRequiredPage($workspaceAccess);
+    }
+
+    $currentUserId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
+    $ownerId = (int)($workspaceAccess['user_id'] ?? 0);
+    if ($currentUserId <= 0) {
+        renderPublicWorkspaceLoginRequiredPage($workspaceAccess);
+    }
+
+    if (!empty($allowedUserIds) && $currentUserId !== $ownerId && !in_array($currentUserId, $allowedUserIds, true)) {
+        renderPublicWorkspaceAccessDeniedPage();
+    }
+
+    return true;
+}
+
+function enforcePublicWorkspacePassword(array $workspaceAccess, bool $passedUserRestriction): void {
+    $storedPassword = (string)($workspaceAccess['password'] ?? '');
+    if ($storedPassword === '' || $passedUserRestriction) {
+        return;
+    }
+
+    $sessionKey = getPublicWorkspacePasswordSessionKey($workspaceAccess);
+    $passwordError = false;
+    $workspaceName = trim((string)($workspaceAccess['workspace_name'] ?? ''));
+
+    if (isset($_POST['workspace_password'])) {
+        $submittedPassword = (string)$_POST['workspace_password'];
+        if (password_verify($submittedPassword, $storedPassword)) {
+            $_SESSION[$sessionKey] = true;
+            if ($workspaceName !== '') {
+                header('Location: ' . buildExplicitPublicWorkspaceUrl($workspaceName));
+                exit;
+            }
+        } else {
+            $passwordError = true;
+        }
+    }
+
+    if (empty($_SESSION[$sessionKey])) {
+        renderPublicWorkspacePasswordPage($workspaceAccess, $passwordError);
     }
 }
 
@@ -393,8 +583,13 @@ function activatePublicWorkspaceAccess(array $workspaceAccess): void {
 }
 
 function maybeAuthenticatePublicWorkspaceRequest(): bool {
-    if (isAuthenticated()) {
+    if (isPublicWorkspaceAccessActive()) {
         return true;
+    }
+
+    $alreadyAuthenticated = isAuthenticated();
+    if ($alreadyAuthenticated && !isExplicitPublicWorkspaceRequest()) {
+        return false;
     }
 
     $workspaceName = getRequestedWorkspaceNameForPublicAccess();
@@ -407,6 +602,9 @@ function maybeAuthenticatePublicWorkspaceRequest(): bool {
         return false;
     }
 
+    $passedUserRestriction = authorizePublicWorkspaceRequest($workspaceAccess);
+    enforcePublicWorkspacePassword($workspaceAccess, $passedUserRestriction);
+
     activatePublicWorkspaceAccess($workspaceAccess);
     return true;
 }
@@ -417,7 +615,7 @@ function getPublicWorkspaceRedirectUrl(): string {
         return 'index.php';
     }
 
-    return 'index.php?workspace=' . urlencode($workspaceName);
+    return buildExplicitPublicWorkspaceUrl($workspaceName);
 }
 
 function denyPublicWorkspaceAccessResponse(string $message, int $code = 403): void {
@@ -569,7 +767,12 @@ function logout() {
 }
 
 function requireAuth() {
-    if (!isAuthenticated() && !maybeAuthenticatePublicWorkspaceRequest()) {
+    if (maybeAuthenticatePublicWorkspaceRequest()) {
+        enforcePublicWorkspaceRequestAccess();
+        return;
+    }
+
+    if (!isAuthenticated()) {
         header('Location: login.php');
         exit;
     }

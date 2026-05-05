@@ -495,12 +495,23 @@
     "share": {
       "actions": {
         "enable": "共享",
+        "edit": "编辑共享",
+        "copy_link": "复制分享链接",
         "disable": "取消共享"
       },
       "confirm": {
         "title": "共享工作区",
         "message": "任何拥有工作区“{{workspace}}”URL 的人都可以访问此工作区中的所有笔记和文件夹。\n\n他们无法修改任何内容，只能查看。",
         "confirm_button": "共享工作区"
+      },
+      "messages": {
+        "url_copied": "分享链接已复制到剪贴板！"
+      },
+      "errors": {
+        "copy_failed": "无法复制分享链接"
+      },
+      "options": {
+        "require_login": "需要登录 Poznote"
       }
     }
   },

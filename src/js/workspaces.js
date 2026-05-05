@@ -3,6 +3,7 @@
 
 // Global workspace state
 var selectedWorkspace = '';
+var workspaceSharePasswordCache = Object.create(null);
 
 // Use global translation function from globals.js
 var wsTr = window.t || function (key, vars, fallback) {
@@ -536,15 +537,70 @@ function getWorkspaceShareConfirmButtonText() {
     return wsTr('workspaces.share.confirm.confirm_button', {}, 'Share workspace');
 }
 
-function updateWorkspaceShareToggleButton(button, isShared) {
+function parseWorkspaceShareAllowedUsers(button) {
+    if (!button) return [];
+    try {
+        var parsed = JSON.parse(button.getAttribute('data-allowed-users') || '[]');
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map(function (id) { return parseInt(id, 10); }).filter(function (id) { return id > 0; });
+    } catch (e) {
+        return [];
+    }
+}
+
+function getCurrentWorkspaceUserId() {
+    var raw = document.body ? document.body.getAttribute('data-current-user-id') : '0';
+    var parsed = parseInt(raw || '0', 10);
+    return isNaN(parsed) ? 0 : parsed;
+}
+
+function getWorkspaceSharePasswordCacheKey(button) {
+    return button ? (button.getAttribute('data-ws') || '') : '';
+}
+
+function getCachedWorkspaceSharePassword(button) {
+    var cacheKey = getWorkspaceSharePasswordCacheKey(button);
+    return cacheKey ? (workspaceSharePasswordCache[cacheKey] || '') : '';
+}
+
+function setCachedWorkspaceSharePassword(button, password) {
+    var cacheKey = getWorkspaceSharePasswordCacheKey(button);
+    if (!cacheKey) return;
+    if (password) {
+        workspaceSharePasswordCache[cacheKey] = password;
+    } else {
+        delete workspaceSharePasswordCache[cacheKey];
+    }
+}
+
+function updateWorkspaceShareToggleButton(button, isShared, shareState) {
     if (!button) return;
 
-    button.setAttribute('data-action', isShared ? 'disable_readonly_share' : 'upsert_readonly_share');
+    button.setAttribute('data-action', 'upsert_readonly_share');
+    button.setAttribute('data-shared', isShared ? '1' : '0');
     button.textContent = isShared
-        ? getWorkspaceShareText('workspace-share-disable-btn', 'Unshare')
+        ? getWorkspaceShareText('workspace-share-edit-btn', 'Edit share')
         : getWorkspaceShareText('workspace-share-enable-btn', 'Share');
-    button.classList.toggle('btn-danger', isShared);
-    button.classList.toggle('btn-success', !isShared);
+    button.classList.toggle('btn-success', true);
+    button.classList.remove('btn-danger');
+    button.classList.remove('btn-warning');
+    button.classList.remove('btn-primary');
+
+    if (shareState && Object.prototype.hasOwnProperty.call(shareState, 'url')) {
+        button.setAttribute('data-url', isShared ? (shareState.url || '') : '');
+    } else if (!isShared) {
+        button.setAttribute('data-url', '');
+    }
+
+    if (shareState) {
+        button.setAttribute('data-has-password', shareState.hasPassword ? '1' : '0');
+        button.setAttribute('data-login-required', shareState.loginRequired ? '1' : '0');
+        button.setAttribute('data-allowed-users', JSON.stringify(shareState.allowed_users || []));
+    }
+
+    if (!isShared || !shareState || !shareState.hasPassword) {
+        setCachedWorkspaceSharePassword(button, '');
+    }
 }
 
 function showWorkspaceShareError(message) {
@@ -560,10 +616,372 @@ function showWorkspaceShareError(message) {
     window.alert(message);
 }
 
-function submitWorkspaceShareToggle(button) {
+function showWorkspaceShareToast(message, type) {
+    if (!document.body) return;
+
+    var existing = document.getElementById('workspaceShareToast');
+    if (existing && existing.parentNode) {
+        existing.parentNode.removeChild(existing);
+    }
+
+    var toast = document.createElement('div');
+    toast.id = 'workspaceShareToast';
+    toast.className = 'alert ' + (type === 'danger' || type === 'error' ? 'alert-danger' : 'alert-success');
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', type === 'danger' || type === 'error' ? 'assertive' : 'polite');
+    toast.textContent = message;
+    toast.style.position = 'fixed';
+    toast.style.right = '20px';
+    toast.style.bottom = '20px';
+    toast.style.zIndex = '10050';
+    toast.style.minWidth = '220px';
+    toast.style.maxWidth = '360px';
+    toast.style.margin = '0';
+    toast.style.padding = '10px 14px';
+    toast.style.borderRadius = '10px';
+    toast.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.18)';
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(8px)';
+    toast.style.transition = 'opacity 160ms ease, transform 160ms ease';
+
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(function () {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+    });
+
+    setTimeout(function () {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        setTimeout(function () {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 180);
+    }, 2600);
+}
+
+function showWorkspaceShareOptionsModal(button) {
+    var workspaceName = button.getAttribute('data-ws') || '';
+    var isExistingShare = button.getAttribute('data-shared') === '1';
+    var currentShareUrl = button.getAttribute('data-url') || '';
+    var cachedPassword = getCachedWorkspaceSharePassword(button);
+    var selectedUserIds = parseWorkspaceShareAllowedUsers(button);
+    var availableUsers = [];
+    var usersLoaded = false;
+    var initialLoginRequired = button.getAttribute('data-login-required') === '1' || selectedUserIds.length > 0;
+    var passwordDirty = false;
+
+    var modal = document.createElement('div');
+    modal.className = 'modal shared-edit-token-modal';
+    modal.style.display = 'flex';
+
+    var content = document.createElement('div');
+    content.className = 'modal-content shared-edit-token-modal-content';
+
+    var title = document.createElement('h3');
+    title.textContent = getWorkspaceShareConfirmTitle();
+    content.appendChild(title);
+
+    var message = document.createElement('p');
+    message.textContent = getWorkspaceShareConfirmMessage(workspaceName);
+    message.style.whiteSpace = 'pre-line';
+    content.appendChild(message);
+
+    var passwordRow = document.createElement('div');
+    passwordRow.className = 'shared-edit-token-field-row';
+
+    var passwordLabel = document.createElement('label');
+    passwordLabel.className = 'shared-edit-token-field-label';
+    passwordLabel.textContent = getWorkspaceShareText('workspace-share-password-label', 'Password (optional)');
+    passwordRow.appendChild(passwordLabel);
+
+    var passwordValue = document.createElement('div');
+    passwordValue.className = 'shared-edit-token-field-value';
+
+    var passwordGroup = document.createElement('div');
+    passwordGroup.className = 'shared-edit-token-inline-group';
+
+    var passwordInput = document.createElement('input');
+    passwordInput.type = 'text';
+    passwordInput.value = cachedPassword;
+    passwordInput.placeholder = getWorkspaceShareText('workspace-share-password-placeholder', 'Enter a password');
+    passwordInput.className = 'modal-password-input';
+    passwordInput.autocomplete = 'new-password';
+    passwordInput.style.width = '100%';
+    passwordInput.style.boxSizing = 'border-box';
+
+    passwordInput.addEventListener('input', function () {
+        passwordDirty = true;
+    });
+
+    passwordGroup.appendChild(passwordInput);
+    passwordValue.appendChild(passwordGroup);
+    passwordRow.appendChild(passwordValue);
+    content.appendChild(passwordRow);
+
+    var loginWrap = document.createElement('div');
+    loginWrap.className = 'share-indexable-wrap';
+    loginWrap.style.marginTop = '14px';
+
+    var loginLabel = document.createElement('label');
+    loginLabel.className = 'share-indexable-label';
+    loginLabel.style.display = 'flex';
+    loginLabel.style.alignItems = 'center';
+    loginLabel.style.justifyContent = 'space-between';
+    loginLabel.style.width = '100%';
+
+    var loginText = document.createElement('span');
+    loginText.className = 'indexable-label-text';
+    loginText.textContent = getWorkspaceShareText('workspace-share-require-login', 'Require Poznote login');
+
+    var loginToggle = document.createElement('label');
+    loginToggle.className = 'toggle-switch';
+    var loginCheckbox = document.createElement('input');
+    loginCheckbox.type = 'checkbox';
+    loginCheckbox.checked = initialLoginRequired;
+    var loginSlider = document.createElement('span');
+    loginSlider.className = 'toggle-slider';
+    loginToggle.appendChild(loginCheckbox);
+    loginToggle.appendChild(loginSlider);
+    loginLabel.appendChild(loginText);
+    loginLabel.appendChild(loginToggle);
+    loginWrap.appendChild(loginLabel);
+    content.appendChild(loginWrap);
+
+    var specificUsersWrap = document.createElement('div');
+    specificUsersWrap.className = 'share-restrict-users-wrap';
+    specificUsersWrap.style.marginTop = '14px';
+    specificUsersWrap.style.display = loginCheckbox.checked ? 'block' : 'none';
+
+    var specificUsersLabel = document.createElement('label');
+    specificUsersLabel.className = 'share-indexable-label';
+    specificUsersLabel.style.display = 'flex';
+    specificUsersLabel.style.alignItems = 'center';
+    specificUsersLabel.style.justifyContent = 'space-between';
+    specificUsersLabel.style.width = '100%';
+
+    var specificUsersText = document.createElement('span');
+    specificUsersText.className = 'indexable-label-text';
+    specificUsersText.textContent = getWorkspaceShareText('workspace-share-restrict-users', 'Restrict to specific users');
+
+    var specificUsersToggle = document.createElement('label');
+    specificUsersToggle.className = 'toggle-switch';
+    var specificUsersCheckbox = document.createElement('input');
+    specificUsersCheckbox.type = 'checkbox';
+    specificUsersCheckbox.checked = selectedUserIds.length > 0;
+    var specificUsersSlider = document.createElement('span');
+    specificUsersSlider.className = 'toggle-slider';
+    specificUsersToggle.appendChild(specificUsersCheckbox);
+    specificUsersToggle.appendChild(specificUsersSlider);
+    specificUsersLabel.appendChild(specificUsersText);
+    specificUsersLabel.appendChild(specificUsersToggle);
+    specificUsersWrap.appendChild(specificUsersLabel);
+
+    var userListContainer = document.createElement('div');
+    userListContainer.className = 'share-user-list-container';
+    userListContainer.style.display = specificUsersCheckbox.checked ? 'block' : 'none';
+    specificUsersWrap.appendChild(userListContainer);
+    content.appendChild(specificUsersWrap);
+
+    function renderUserCheckboxes() {
+        userListContainer.innerHTML = '';
+        if (availableUsers.length === 0) {
+            var noUsers = document.createElement('div');
+            noUsers.className = 'share-user-list-message';
+            noUsers.textContent = getWorkspaceShareText('workspace-share-no-users', 'No other users found');
+            userListContainer.appendChild(noUsers);
+            return;
+        }
+
+        availableUsers.forEach(function (user) {
+            var row = document.createElement('label');
+            row.className = 'share-user-list-row';
+
+            var checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = user.id;
+            checkbox.checked = selectedUserIds.indexOf(user.id) !== -1;
+            checkbox.addEventListener('change', function () {
+                if (checkbox.checked) {
+                    if (selectedUserIds.indexOf(user.id) === -1) selectedUserIds.push(user.id);
+                } else {
+                    selectedUserIds = selectedUserIds.filter(function (id) { return id !== user.id; });
+                }
+            });
+
+            var displayName = document.createElement('span');
+            displayName.className = 'share-user-list-name';
+            displayName.textContent = user.username + (user.email ? ' (' + user.email + ')' : '');
+
+            row.appendChild(checkbox);
+            row.appendChild(displayName);
+            userListContainer.appendChild(row);
+        });
+    }
+
+    function loadAvailableUsers() {
+        userListContainer.innerHTML = '';
+        var loading = document.createElement('div');
+        loading.className = 'share-user-list-message';
+        loading.textContent = getWorkspaceShareText('workspace-share-users-loading', 'Loading users...');
+        userListContainer.appendChild(loading);
+
+        fetch('/api/v1/users/profiles', {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
+            .then(function (resp) { return resp.json(); })
+            .then(function (users) {
+                var currentUserId = getCurrentWorkspaceUserId();
+                availableUsers = (users || []).filter(function (user) {
+                    return parseInt(user.id, 10) !== currentUserId;
+                }).map(function (user) {
+                    return {
+                        id: parseInt(user.id, 10),
+                        username: user.username || '',
+                        email: user.email || ''
+                    };
+                });
+                usersLoaded = true;
+                renderUserCheckboxes();
+            })
+            .catch(function () {
+                userListContainer.innerHTML = '';
+                var error = document.createElement('div');
+                error.className = 'share-user-list-message is-error';
+                error.textContent = wsTr('common.error', {}, 'Error');
+                userListContainer.appendChild(error);
+            });
+    }
+
+    function updateUserRestrictionVisibility() {
+        specificUsersWrap.style.display = loginCheckbox.checked ? 'block' : 'none';
+        userListContainer.style.display = loginCheckbox.checked && specificUsersCheckbox.checked ? 'block' : 'none';
+        if (loginCheckbox.checked && specificUsersCheckbox.checked && !usersLoaded) {
+            loadAvailableUsers();
+        }
+        if (!loginCheckbox.checked || !specificUsersCheckbox.checked) {
+            selectedUserIds = [];
+        }
+    }
+
+    loginCheckbox.addEventListener('change', updateUserRestrictionVisibility);
+    specificUsersCheckbox.addEventListener('change', updateUserRestrictionVisibility);
+    if (loginCheckbox.checked && specificUsersCheckbox.checked) {
+        loadAvailableUsers();
+    }
+
+    var actions = document.createElement('div');
+    actions.className = 'shared-edit-token-modal-actions';
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.textContent = getWorkspaceShareText('workspace-share-cancel', 'Cancel');
+
+    var unshareBtn = null;
+    if (isExistingShare) {
+        unshareBtn = document.createElement('button');
+        unshareBtn.type = 'button';
+        unshareBtn.className = 'btn btn-danger';
+        unshareBtn.textContent = getWorkspaceShareText('workspace-share-disable-btn', 'Unshare');
+    }
+
+    var shareBtn = document.createElement('button');
+    shareBtn.type = 'button';
+    shareBtn.className = 'btn btn-primary';
+    shareBtn.textContent = isExistingShare
+        ? wsTr('common.save', {}, 'Save')
+        : getWorkspaceShareConfirmButtonText();
+
+    function closeModal() {
+        if (modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+        }
+    }
+
+    cancelBtn.addEventListener('click', closeModal);
+    if (unshareBtn) {
+        unshareBtn.addEventListener('click', function () {
+            unshareBtn.disabled = true;
+            shareBtn.disabled = true;
+            submitWorkspaceShareToggle(button, { action: 'disable_readonly_share' })
+                .then(closeModal)
+                .catch(function () {
+                    unshareBtn.disabled = false;
+                    shareBtn.disabled = false;
+                });
+        });
+    }
+
+    shareBtn.addEventListener('click', function () {
+        var passwordValue = passwordDirty ? passwordInput.value.trim() : undefined;
+
+        shareBtn.disabled = true;
+        submitWorkspaceShareToggle(button, {
+            password: passwordValue,
+            login_required: loginCheckbox.checked,
+            allowed_users: loginCheckbox.checked && specificUsersCheckbox.checked ? selectedUserIds.slice() : []
+        }).then(function (json) {
+            if (passwordDirty) {
+                setCachedWorkspaceSharePassword(button, passwordValue || '');
+            }
+            currentShareUrl = (json && json.url) || currentShareUrl;
+
+            if (!currentShareUrl) {
+                closeModal();
+                return;
+            }
+
+            return copyWorkspaceShareUrl(currentShareUrl)
+                .then(function () {
+                    closeModal();
+                    showWorkspaceShareToast(
+                        getWorkspaceShareText('workspace-share-copy-success', 'Share link copied to clipboard!'),
+                        'success'
+                    );
+                })
+                .catch(function (err) {
+                    console.error('Error auto-copying workspace share URL after save:', err);
+                    closeModal();
+                    showWorkspaceShareToast(
+                        getWorkspaceShareText('workspace-share-copy-failed', 'Failed to copy share link'),
+                        'danger'
+                    );
+                });
+        }).catch(function () {
+            shareBtn.disabled = false;
+            if (unshareBtn) {
+                unshareBtn.disabled = false;
+            }
+        });
+    });
+
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal) closeModal();
+    });
+
+    modal.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeModal();
+    });
+
+    actions.appendChild(cancelBtn);
+    if (unshareBtn) {
+        actions.appendChild(unshareBtn);
+    }
+    actions.appendChild(shareBtn);
+    content.appendChild(actions);
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+    shareBtn.focus();
+}
+
+function submitWorkspaceShareToggle(button, options) {
     var wsName = button.getAttribute('data-ws');
-    var action = button.getAttribute('data-action');
-    if (!wsName || !action || button.disabled) return;
+    var action = (options && options.action) || button.getAttribute('data-action');
+    if (!wsName || !action || button.disabled) return Promise.resolve();
 
     button.disabled = true;
 
@@ -572,7 +990,17 @@ function submitWorkspaceShareToggle(button) {
         name: wsName
     });
 
-    fetch('workspaces.php', {
+    if (options && Object.prototype.hasOwnProperty.call(options, 'password') && options.password !== undefined) {
+        params.set('password', options.password || '');
+    }
+    if (options && Object.prototype.hasOwnProperty.call(options, 'login_required')) {
+        params.set('login_required', options.login_required ? '1' : '0');
+    }
+    if (options && Object.prototype.hasOwnProperty.call(options, 'allowed_users')) {
+        params.set('allowed_users', JSON.stringify(options.allowed_users || []));
+    }
+
+    return fetch('workspaces.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -586,21 +1014,25 @@ function submitWorkspaceShareToggle(button) {
         button.disabled = false;
         if (json && json.success) {
             var isShared = action === 'upsert_readonly_share';
-            updateWorkspaceShareToggleButton(button, isShared);
+            updateWorkspaceShareToggleButton(button, isShared, json);
+            return json;
         } else {
-            showWorkspaceShareError(
-                wsTr(
-                    'workspaces.alerts.error_prefix',
-                    { error: (json && json.error) || wsTr('workspaces.alerts.unknown_error', {}, 'Unknown error') },
-                    'Error: {{error}}'
-                )
+            var message = wsTr(
+                'workspaces.alerts.error_prefix',
+                { error: (json && json.error) || wsTr('workspaces.alerts.unknown_error', {}, 'Unknown error') },
+                'Error: {{error}}'
             );
+            showWorkspaceShareError(message);
+            throw new Error(message);
         }
     })
     .catch(function (err) {
         button.disabled = false;
         console.error('Error toggling workspace share:', err);
-        showWorkspaceShareError(wsTr('workspaces.alerts.share_error', {}, 'Error updating sharing status'));
+        if (!err || !err.message || err.message.indexOf('Error:') !== 0) {
+            showWorkspaceShareError(wsTr('workspaces.alerts.share_error', {}, 'Error updating sharing status'));
+        }
+        throw err;
     });
 }
 
@@ -611,29 +1043,11 @@ function handleWorkspaceShareToggleClick(e) {
         if (!action || btn.disabled) return;
 
         if (action !== 'upsert_readonly_share') {
-            submitWorkspaceShareToggle(btn);
+            submitWorkspaceShareToggle(btn).catch(function () {});
             return;
         }
 
-        var workspaceName = btn.getAttribute('data-ws') || '';
-        var title = getWorkspaceShareConfirmTitle();
-        var message = getWorkspaceShareConfirmMessage(workspaceName);
-        var confirmText = getWorkspaceShareConfirmButtonText();
-
-        if (window.modalAlert && typeof window.modalAlert.confirm === 'function') {
-            window.modalAlert.confirm(message, title, {
-                alertType: 'info',
-                confirmText: confirmText
-            }).then(function (confirmed) {
-                if (!confirmed) return;
-                submitWorkspaceShareToggle(btn);
-            });
-            return;
-        }
-
-        if (window.confirm(message)) {
-            submitWorkspaceShareToggle(btn);
-        }
+        showWorkspaceShareOptionsModal(btn);
     }
 }
 
@@ -741,31 +1155,48 @@ function copyWorkspaceShareUrl(url) {
         return Promise.reject(new Error('Missing URL'));
     }
 
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        return navigator.clipboard.writeText(url);
+    var clipboardUrl = url;
+    try {
+        var parsedUrl = new URL(url, window.location.href);
+        parsedUrl.searchParams.delete('public_workspace');
+        clipboardUrl = parsedUrl.toString();
+    } catch (e) {
+        clipboardUrl = url.replace(/([?&])public_workspace=1(&|$)/, function (match, prefix, suffix) {
+            return prefix === '?' && suffix ? '?' : (prefix === '?' ? '' : prefix);
+        });
     }
 
-    return new Promise(function (resolve, reject) {
-        var input = document.createElement('input');
-        input.type = 'text';
-        input.value = url;
-        document.body.appendChild(input);
-        input.select();
-        input.setSelectionRange(0, input.value.length);
+    function fallbackCopy() {
+        return new Promise(function (resolve, reject) {
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.value = clipboardUrl;
+            document.body.appendChild(input);
+            input.select();
+            input.setSelectionRange(0, input.value.length);
 
-        try {
-            var copied = document.execCommand('copy');
-            document.body.removeChild(input);
-            if (copied) {
-                resolve();
-            } else {
-                reject(new Error('Copy command failed'));
+            try {
+                var copied = document.execCommand('copy');
+                document.body.removeChild(input);
+                if (copied) {
+                    resolve();
+                } else {
+                    reject(new Error('Copy command failed'));
+                }
+            } catch (err) {
+                document.body.removeChild(input);
+                reject(err);
             }
-        } catch (err) {
-            document.body.removeChild(input);
-            reject(err);
-        }
-    });
+        });
+    }
+
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        return navigator.clipboard.writeText(clipboardUrl).catch(function () {
+            return fallbackCopy();
+        });
+    }
+
+    return fallbackCopy();
 }
 
 function handleWorkspaceReadonlyShareSave(e) {
@@ -865,11 +1296,11 @@ function handleWorkspaceReadonlyShareCopy(e) {
     var url = button.getAttribute('data-url') || '';
     copyWorkspaceShareUrl(url)
         .then(function () {
-            showAjaxAlert(getWorkspaceShareText('workspace-share-copy-success', 'URL copied!'), 'success');
+            showWorkspaceShareToast(getWorkspaceShareText('workspace-share-copy-success', 'Share link copied to clipboard!'), 'success');
         })
         .catch(function (err) {
             console.error('Error copying workspace share URL:', err);
-            showAjaxAlert(wsTr('workspaces.share.errors.copy_failed', {}, 'Failed to copy URL'), 'danger');
+            showWorkspaceShareToast(getWorkspaceShareText('workspace-share-copy-failed', 'Failed to copy share link'), 'danger');
         });
 
     return true;

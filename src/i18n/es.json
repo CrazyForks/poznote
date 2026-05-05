@@ -494,12 +494,23 @@
     "share": {
       "actions": {
         "enable": "Compartir",
+        "edit": "Editar uso compartido",
+        "copy_link": "Copiar enlace compartido",
         "disable": "Dejar de compartir"
       },
       "confirm": {
         "title": "Compartir espacio de trabajo",
         "message": "Cualquier persona con la URL del espacio de trabajo \"{{workspace}}\" tendrá acceso a todas las notas y carpetas de este espacio de trabajo.\n\nNo podrá modificar nada. Solo podrá consultar el contenido.",
         "confirm_button": "Compartir espacio de trabajo"
+      },
+      "messages": {
+        "url_copied": "¡Enlace compartido copiado al portapapeles!"
+      },
+      "errors": {
+        "copy_failed": "No se pudo copiar el enlace compartido"
+      },
+      "options": {
+        "require_login": "Requerir inicio de sesión en Poznote"
       }
     }
   },

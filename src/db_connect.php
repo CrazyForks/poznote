@@ -229,6 +229,9 @@ try {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         workspace_name TEXT UNIQUE NOT NULL,
         token TEXT UNIQUE NOT NULL,
+        password TEXT,
+        login_required INTEGER DEFAULT 0,
+        allowed_users TEXT,
         created DATETIME DEFAULT CURRENT_TIMESTAMP
     )');
 
@@ -246,7 +249,7 @@ try {
     )');
 
     // --- Schema versioning: skip migrations & indexes if already up to date ---
-    $CURRENT_SCHEMA_VERSION = 8;
+    $CURRENT_SCHEMA_VERSION = 9;
     $currentVersion = 0;
     try {
         $svStmt = $con->query("SELECT value FROM settings WHERE key = 'schema_version'");
@@ -331,6 +334,23 @@ try {
             }
         } catch (Exception $e) {
             error_log('Could not add missing columns to shared_folders: ' . $e->getMessage());
+        }
+
+        // Add missing columns to shared_workspaces
+        try {
+            $cols = $con->query("PRAGMA table_info(shared_workspaces)")->fetchAll(PDO::FETCH_ASSOC);
+            $existingColumns = array_column($cols, 'name');
+            if (!in_array('password', $existingColumns)) {
+                $con->exec("ALTER TABLE shared_workspaces ADD COLUMN password TEXT");
+            }
+            if (!in_array('login_required', $existingColumns)) {
+                $con->exec("ALTER TABLE shared_workspaces ADD COLUMN login_required INTEGER DEFAULT 0");
+            }
+            if (!in_array('allowed_users', $existingColumns)) {
+                $con->exec("ALTER TABLE shared_workspaces ADD COLUMN allowed_users TEXT");
+            }
+        } catch (Exception $e) {
+            error_log('Could not add missing columns to shared_workspaces: ' . $e->getMessage());
         }
 
         // === REMOVE LEGACY COLUMNS === (Schema version 4)

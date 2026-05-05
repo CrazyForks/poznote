@@ -495,12 +495,23 @@
     "share": {
       "actions": {
         "enable": "Teilen",
+        "edit": "Freigabe bearbeiten",
+        "copy_link": "Freigabelink kopieren",
         "disable": "Freigabe aufheben"
       },
       "confirm": {
         "title": "Arbeitsbereich teilen",
         "message": "Jede Person mit der URL des Arbeitsbereichs \"{{workspace}}\" hat Zugriff auf alle Notizen und Ordner in diesem Arbeitsbereich.\n\nEs sind keine Änderungen möglich. Der Inhalt kann nur angesehen werden.",
         "confirm_button": "Arbeitsbereich teilen"
+      },
+      "messages": {
+        "url_copied": "Freigabelink in die Zwischenablage kopiert!"
+      },
+      "errors": {
+        "copy_failed": "Freigabelink konnte nicht kopiert werden"
+      },
+      "options": {
+        "require_login": "Poznote-Anmeldung erforderlich"
       }
     }
   },

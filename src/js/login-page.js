@@ -63,7 +63,11 @@
                     oidcLoginBtn.addEventListener('click', function (e) {
                         e.preventDefault();
                         var rememberMe = rememberMeCheckbox.checked ? '1' : '0';
-                        window.location.href = 'oidc_login.php?remember_me=' + rememberMe;
+                        var params = new URLSearchParams({ remember_me: rememberMe });
+                        if (config.redirectAfter) {
+                            params.set('redirect', config.redirectAfter);
+                        }
+                        window.location.href = 'oidc_login.php?' + params.toString();
                     });
                 }
             }
