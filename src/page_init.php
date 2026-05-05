@@ -25,6 +25,13 @@ function initializeWorkspacesAndLabels($con) {
             $workspaces = [];
         }
     }
+    
+    if (function_exists('isPublicWorkspaceAccessActive') && isPublicWorkspaceAccessActive()) {
+        $publicWorkspaceName = getPublicWorkspaceName();
+        $workspaces = $publicWorkspaceName !== null && $publicWorkspaceName !== '' ? [$publicWorkspaceName] : [];
+        $labels = [];
+        return;
+    }
 
     if (!isset($labels) || !is_array($labels)) {
         // Labels table is not yet implemented; defaults to empty map.

@@ -51,6 +51,7 @@ try {
     $stmt = $con->prepare('SELECT folder_id, created, theme, indexable, password, allowed_users FROM shared_folders WHERE token = ?');
     $stmt->execute([$token]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
     if (!$row) {
         $statusMsg = t_h('public.errors.shared_folder_not_found', [], "Shared folder not found.\n\nThis can happen after a restore.\n\nAn administrator may need to rebuild the master database in Settings > Administration Tools to repair shared links.", $currentLang);
         [$statusTitle, $statusDetail] = array_pad(explode("\n\n", $statusMsg, 2), 2, '');
@@ -322,6 +323,17 @@ $noteBaseUrl = $protocol . '://' . $host;
         </div>
     <?php endif; ?>
 
+    <?php if ($isWorkspaceShared && !empty($directSubfolders)): ?>
+        <div class="public-workspace-subfolders">
+            <?php foreach ($directSubfolders as $subfolder): ?>
+                <a href="<?php echo htmlspecialchars(buildPublicAppHref('public_folder.php?token=' . rawurlencode($token) . '&folder_id=' . rawurlencode((string)$subfolder['id'])), ENT_QUOTES, 'UTF-8'); ?>" class="public-workspace-subfolder-link">
+                    <i class="lucide lucide-folder"></i>
+                    <span><?php echo htmlspecialchars($subfolder['name']); ?></span>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
     <?php if (empty($sharedNotes)): ?>
         <div id="folderEmptyMessage" class="empty-folder">
             <i class="lucide lucide-folder-open"></i>
@@ -421,7 +433,7 @@ $noteBaseUrl = $protocol . '://' . $host;
         } else {
             $noteTitleLower = strtolower($noteTitleLower);
         }
-        
+
         $noteUrl = !empty($note['token']) ? ($noteBaseUrl . '/' . $note['token'] . '?folder_token=' . $folderToken) : ($noteBaseUrl . '/public_note.php?id=' . $note['id'] . '&folder_token=' . $folderToken);
         ?>
         <li class="public-note-item" data-title="<?php echo htmlspecialchars($noteTitleLower, ENT_QUOTES, 'UTF-8'); ?>">

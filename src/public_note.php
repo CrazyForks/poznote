@@ -216,7 +216,8 @@ try {
             }
         }
     }
-    
+
+
     if (!$sharedNote) {
         $noteMsg = t_h('public.errors.shared_note_not_found_or_denied', [], "Shared note not found or access denied.\n\nThis can happen after a restore.\n\nAn administrator may need to rebuild the master database in Settings > Administration Tools to repair shared links.", $currentLang);
         [, $noteDetail] = array_pad(explode("\n\n", $noteMsg, 2), 2, '');

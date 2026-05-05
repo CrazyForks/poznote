@@ -65,13 +65,19 @@ body.dark-mode .markdown-preview blockquote {
 }
 
 /* Tables */
+html[data-theme='dark'] .noteentry table,
 html[data-theme='dark'] .markdown-preview table,
+body.dark-mode .noteentry table,
 body.dark-mode .markdown-preview table {
     border-color: var(--dm-border);
 }
 
+html[data-theme='dark'] .noteentry table th,
+html[data-theme='dark'] .noteentry table td,
 html[data-theme='dark'] .markdown-preview table th,
 html[data-theme='dark'] .markdown-preview table td,
+body.dark-mode .noteentry table th,
+body.dark-mode .noteentry table td,
 body.dark-mode .markdown-preview table th,
 body.dark-mode .markdown-preview table td {
     border-color: var(--dm-border);
@@ -79,14 +85,20 @@ body.dark-mode .markdown-preview table td {
     background-color: var(--dm-surface);
 }
 
+html[data-theme='dark'] .noteentry table th,
 html[data-theme='dark'] .markdown-preview table th,
+body.dark-mode .noteentry table th,
 body.dark-mode .markdown-preview table th {
     background-color: var(--dm-surface);
     font-weight: bold;
 }
 
+html[data-theme='dark'] .noteentry table tr:nth-child(even),
+html[data-theme='dark'] .noteentry table tr:nth-child(even) td,
 html[data-theme='dark'] .markdown-preview table tr:nth-child(even),
 html[data-theme='dark'] .markdown-preview table tr:nth-child(even) td,
+body.dark-mode .noteentry table tr:nth-child(even),
+body.dark-mode .noteentry table tr:nth-child(even) td,
 body.dark-mode .markdown-preview table tr:nth-child(even),
 body.dark-mode .markdown-preview table tr:nth-child(even) td {
     background-color: var(--dm-surface);

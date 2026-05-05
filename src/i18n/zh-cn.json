@@ -491,6 +491,28 @@
     "confirm_delete": {
       "title": "确认删除工作区",
       "message": "删除工作区 \"{{workspace}}\"？笔记将被移动到启动工作区。"
+    },
+    "share": {
+      "actions": {
+        "enable": "共享",
+        "edit": "编辑共享",
+        "copy_link": "复制分享链接",
+        "disable": "取消共享"
+      },
+      "confirm": {
+        "title": "共享工作区",
+        "message": "任何拥有工作区“{{workspace}}”URL 的人都可以访问此工作区中的所有笔记和文件夹。\n\n他们无法修改任何内容，只能查看。",
+        "confirm_button": "共享工作区"
+      },
+      "messages": {
+        "url_copied": "分享链接已复制到剪贴板！"
+      },
+      "errors": {
+        "copy_failed": "无法复制分享链接"
+      },
+      "options": {
+        "require_login": "需要登录 Poznote"
+      }
     }
   },
   "display": {
@@ -990,6 +1012,12 @@
       "message": "您想删除什么？",
       "delete_link_only": "仅删除此快捷方式",
       "delete_link_and_target": "删除笔记及其所有快捷方式"
+    },
+    "move_linked_note": {
+      "title": "移动快捷方式",
+      "message": "您想移动什么？",
+      "move_link_only": "仅移动此快捷方式",
+      "move_target_note": "移动原始笔记"
     },
     "convert": {
       "title": "转换笔记",

@@ -336,12 +336,15 @@ body.slash-menu-cursor-hidden * {
     color: #999;
 }
 
+.noteentry table,
 .markdown-preview table {
     border-collapse: collapse;
     width: 100%;
     margin: 1em 0;
 }
 
+.noteentry table th,
+.noteentry table td,
 .markdown-preview table th,
 .markdown-preview table td {
     border: 1px solid #ddd;
@@ -350,11 +353,13 @@ body.slash-menu-cursor-hidden * {
     white-space: pre-line;
 }
 
+.noteentry table th,
 .markdown-preview table th {
     background-color: #f4f4f4;
     font-weight: bold;
 }
 
+.noteentry table tr:nth-child(even),
 .markdown-preview table tr:nth-child(even) {
     background-color: #f9f9f9;
 }

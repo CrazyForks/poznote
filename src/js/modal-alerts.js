@@ -8,6 +8,14 @@ var tr = window.t || function(key, vars, fallback) {
     return fallback || key;
 };
 
+function shouldSuppressAlertMessage(message) {
+    if (message == null) return false;
+
+    const normalized = String(message).toLowerCase();
+    return normalized.includes('public workspace is read-only') ||
+        normalized.includes('public workspace is readonly');
+}
+
 class ModalAlert {
     constructor() {
         this.currentModal = null;
@@ -24,6 +32,11 @@ class ModalAlert {
      */
     alert(message, type = 'info', title = null) {
         return new Promise((resolve) => {
+            if (shouldSuppressAlertMessage(message)) {
+                resolve();
+                return;
+            }
+
             const config = {
                 type: 'alert',
                 message,

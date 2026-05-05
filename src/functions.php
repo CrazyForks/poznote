@@ -852,6 +852,10 @@ function resolveTasklistStoredContent($primaryContent, $fallbackContent = '') {
  * @return string The first workspace name, or empty string if none exists
  */
 function getFirstWorkspaceName() {
+    if (function_exists('isPublicWorkspaceAccessActive') && isPublicWorkspaceAccessActive()) {
+        return getPublicWorkspaceName() ?? '';
+    }
+
     global $con;
     if (isset($con)) {
         try {
@@ -880,6 +884,10 @@ function getFirstWorkspaceName() {
  */
 function getWorkspaceFilter() {
     static $cached = null;
+
+    if (function_exists('isPublicWorkspaceAccessActive') && isPublicWorkspaceAccessActive()) {
+        return getPublicWorkspaceName() ?? '';
+    }
     
     // First check URL parameters - but ignore if empty
     // These are dynamic, so don't cache if found
@@ -945,6 +953,10 @@ function getWorkspaceFilter() {
  */
 function saveLastOpenedWorkspace($workspace) {
     global $con;
+    if (function_exists('isPublicWorkspaceAccessActive') && isPublicWorkspaceAccessActive()) {
+        return false;
+    }
+
     if (!isset($con) || empty($workspace)) {
         return false;
     }

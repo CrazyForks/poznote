@@ -57,7 +57,8 @@ function _createNoteOfType(noteType) {
                     window.navigateToCreatedNoteInInternalTab(
                         data.note.id,
                         data.note.heading,
-                        data.note.workspace || selectedWorkspace || getSelectedWorkspace()
+                        data.note.workspace || selectedWorkspace || getSelectedWorkspace(),
+                        data.note.folder_id || noteData.folder_id
                     );
                 } else {
                     var ws = encodeURIComponent(selectedWorkspace || getSelectedWorkspace());

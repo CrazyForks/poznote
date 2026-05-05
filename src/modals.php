@@ -926,6 +926,21 @@
     </div>
 </div>
 
+<!-- Move Linked Note Modal -->
+<div id="moveLinkedNoteModal" class="modal">
+    <div class="modal-content">
+        <h3><?php echo t_h('modals.move_linked_note.title', [], 'Move Shortcut'); ?></h3>
+        <div class="modal-body">
+            <p><?php echo t_h('modals.move_linked_note.message', [], 'What do you want to move?'); ?></p>
+        </div>
+        <div class="modal-buttons">
+            <button type="button" class="btn-primary" data-action="move-linked-note-shortcut"><?php echo t_h('modals.move_linked_note.move_link_only', [], 'Move this shortcut only'); ?></button>
+            <button type="button" class="btn-secondary" data-action="move-linked-note-target"><?php echo t_h('modals.move_linked_note.move_target_note', [], 'Move the original note'); ?></button>
+            <button type="button" class="btn-cancel" data-action="close-modal" data-modal="moveLinkedNoteModal"><?php echo t_h('common.cancel'); ?></button>
+        </div>
+    </div>
+</div>
+
 <!-- Info Modal -->
 <div id="infoModal" class="modal">
     <div class="modal-content">

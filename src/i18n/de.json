@@ -491,6 +491,28 @@
     "confirm_delete": {
       "title": "Arbeitsbereich löschen bestätigen",
       "message": "Arbeitsbereich \"{{workspace}}\" löschen? Notizen werden in den Startup-Arbeitsbereich verschoben."
+    },
+    "share": {
+      "actions": {
+        "enable": "Teilen",
+        "edit": "Freigabe bearbeiten",
+        "copy_link": "Freigabelink kopieren",
+        "disable": "Freigabe aufheben"
+      },
+      "confirm": {
+        "title": "Arbeitsbereich teilen",
+        "message": "Jede Person mit der URL des Arbeitsbereichs \"{{workspace}}\" hat Zugriff auf alle Notizen und Ordner in diesem Arbeitsbereich.\n\nEs sind keine Änderungen möglich. Der Inhalt kann nur angesehen werden.",
+        "confirm_button": "Arbeitsbereich teilen"
+      },
+      "messages": {
+        "url_copied": "Freigabelink in die Zwischenablage kopiert!"
+      },
+      "errors": {
+        "copy_failed": "Freigabelink konnte nicht kopiert werden"
+      },
+      "options": {
+        "require_login": "Poznote-Anmeldung erforderlich"
+      }
     }
   },
   "display": {
@@ -980,6 +1002,12 @@
       "message": "Was möchten Sie löschen?",
       "delete_link_only": "Nur diese Verknüpfung löschen",
       "delete_link_and_target": "Notiz und alle ihre Verknüpfungen löschen"
+    },
+    "move_linked_note": {
+      "title": "Verknüpfung verschieben",
+      "message": "Was möchten Sie verschieben?",
+      "move_link_only": "Nur diese Verknüpfung verschieben",
+      "move_target_note": "Die Originalnotiz verschieben"
     },
     "convert": {
       "title": "Notiz konvertieren",

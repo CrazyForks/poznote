@@ -502,6 +502,28 @@
     "confirm_delete": {
       "title": "Confirmer la suppression de l’espace de travail",
       "message": "Supprimer l'espace de travail \"{{workspace}}\" ? Les notes seront déplacées vers le workspace de démarrage."
+    },
+    "share": {
+      "actions": {
+        "enable": "Partager",
+        "edit": "Editer le partage",
+        "copy_link": "Copier le lien du partage",
+        "disable": "Ne plus partager"
+      },
+      "confirm": {
+        "title": "Partager l’espace de travail",
+        "message": "Toute personne disposant de l’URL de l’espace de travail \"{{workspace}}\" aura accès à toutes les notes et tous les dossiers de cet espace de travail.\n\nElle ne pourra rien modifier. Elle pourra uniquement consulter le contenu.",
+        "confirm_button": "Partager l’espace de travail"
+      },
+      "messages": {
+        "url_copied": "Lien de partage copié dans le presse-papiers !"
+      },
+      "errors": {
+        "copy_failed": "Impossible de copier le lien de partage"
+      },
+      "options": {
+        "require_login": "Exiger une connexion Poznote"
+      }
     }
   },
   "display": {
@@ -1004,6 +1026,12 @@
       "message": "Que voulez-vous supprimer ?",
       "delete_link_only": "Supprimer uniquement ce raccourci",
       "delete_link_and_target": "Supprimer la note et tous ses raccourcis"
+    },
+    "move_linked_note": {
+      "title": "Déplacer le raccourci",
+      "message": "Que voulez-vous déplacer ?",
+      "move_link_only": "Déplacer uniquement ce raccourci",
+      "move_target_note": "Déplacer la note originale"
     },
     "export": {
       "title": "Exporter la note",
@@ -1809,6 +1837,7 @@
       "title": "Protégé par mot de passe",
       "note_heading": "Protégé par mot de passe",
       "folder_heading": "Dossier protégé par mot de passe",
+      "workspace_heading": "Espace de travail protégé par mot de passe",
       "error_incorrect": "Mot de passe incorrect. Veuillez réessayer.",
       "additional_password_required": "Cette note nécessite un mot de passe supplémentaire. Veuillez entrer le mot de passe suivant pour continuer.",
       "placeholder": "Entrez le mot de passe",

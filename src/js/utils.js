@@ -76,12 +76,13 @@ function getStoredActiveTabNoteId(workspaceName) {
     return null;
 }
 
-function storePendingCreatedNoteOpen(noteId, noteTitle, workspaceName) {
+function storePendingCreatedNoteOpen(noteId, noteTitle, workspaceName, folderId) {
     try {
         sessionStorage.setItem(PENDING_CREATED_NOTE_OPEN_KEY, JSON.stringify({
             noteId: String(noteId),
             noteTitle: noteTitle || getDefaultCreatedNoteTitle(),
-            workspace: normalizeCreatedNoteWorkspace(workspaceName)
+            workspace: normalizeCreatedNoteWorkspace(workspaceName),
+            folderId: folderId !== null && folderId !== undefined && folderId !== '' ? String(folderId) : null
         }));
     } catch (error) {
         // Ignore storage errors and fall back to normal navigation.
@@ -107,7 +108,37 @@ function consumePendingCreatedNoteOpen() {
     }
 }
 
-function openCreatedNoteWithInternalTabs(noteId, noteTitle) {
+function rememberFolderStatesForCreatedNote(folderId) {
+    try {
+        if (typeof persistFolderStatesFromDOM === 'function') {
+            persistFolderStatesFromDOM();
+        }
+
+        if (folderId !== null && folderId !== undefined && folderId !== '') {
+            var folderDomId = 'folder-' + String(folderId);
+            localStorage.setItem('folder_' + folderDomId, 'open');
+
+            try {
+                var pendingCreateFolders = JSON.parse(sessionStorage.getItem('poznote_create_open_folders') || '[]');
+                if (!Array.isArray(pendingCreateFolders)) {
+                    pendingCreateFolders = [];
+                }
+                if (pendingCreateFolders.indexOf(folderDomId) === -1) {
+                    pendingCreateFolders.push(folderDomId);
+                }
+                sessionStorage.setItem('poznote_create_open_folders', JSON.stringify(pendingCreateFolders));
+            } catch (storageError) {
+                // Ignore storage errors and keep the creation flow moving.
+            }
+        }
+    } catch (error) {
+        // Ignore storage errors and keep the creation flow moving.
+    }
+}
+
+window.rememberFolderStatesForCreatedNote = rememberFolderStatesForCreatedNote;
+
+function openCreatedNoteWithInternalTabs(noteId, noteTitle, folderId) {
     if (!window.tabManager || window.innerWidth <= 800) {
         return Promise.resolve(false);
     }
@@ -116,7 +147,7 @@ function openCreatedNoteWithInternalTabs(noteId, noteTitle) {
 
     return Promise.resolve(
         typeof window.refreshNotesListAfterFolderAction === 'function'
-            ? window.refreshNotesListAfterFolderAction()
+            ? window.refreshNotesListAfterFolderAction(folderId)
             : null
     ).catch(function (error) {
         console.error('Error refreshing notes list before opening created note:', error);
@@ -126,21 +157,23 @@ function openCreatedNoteWithInternalTabs(noteId, noteTitle) {
     });
 }
 
-function navigateToCreatedNoteInInternalTab(noteId, noteTitle, workspaceName) {
+function navigateToCreatedNoteInInternalTab(noteId, noteTitle, workspaceName, folderId) {
     if (!noteId) {
         return Promise.resolve(false);
     }
 
+    rememberFolderStatesForCreatedNote(folderId);
+
     var workspace = normalizeCreatedNoteWorkspace(workspaceName);
 
     if (window.tabManager && window.innerWidth > 800) {
-        return openCreatedNoteWithInternalTabs(noteId, noteTitle);
+        return openCreatedNoteWithInternalTabs(noteId, noteTitle, folderId);
     }
 
     if (window.innerWidth > 800) {
         var activeNoteId = getStoredActiveTabNoteId(workspace);
         if (activeNoteId) {
-            storePendingCreatedNoteOpen(noteId, noteTitle, workspace);
+            storePendingCreatedNoteOpen(noteId, noteTitle, workspace, folderId);
             window.location.href = buildIndexNoteUrl(activeNoteId, workspace);
             return Promise.resolve(true);
         }
@@ -172,7 +205,7 @@ function consumePendingCreatedNoteOpenOnLoad(retryCount) {
         return;
     }
 
-    openCreatedNoteWithInternalTabs(pendingRequest.noteId, pendingRequest.noteTitle);
+    openCreatedNoteWithInternalTabs(pendingRequest.noteId, pendingRequest.noteTitle, pendingRequest.folderId);
 }
 
 if (document.readyState === 'loading') {
@@ -1506,13 +1539,25 @@ function toggleFavorites(buttonElement) {
  */
 function persistFolderStatesFromDOM() {
     const folderToggles = document.querySelectorAll('.folder-name[data-folder-dom-id]');
+    let pendingCreateOpenFolders = [];
+
+    try {
+        pendingCreateOpenFolders = JSON.parse(sessionStorage.getItem('poznote_create_open_folders') || '[]');
+        if (!Array.isArray(pendingCreateOpenFolders)) {
+            pendingCreateOpenFolders = [];
+        }
+    } catch (error) {
+        pendingCreateOpenFolders = [];
+    }
 
     folderToggles.forEach(function (toggleElement) {
         const folderDomId = toggleElement.getAttribute('data-folder-dom-id');
         const folderContent = folderDomId ? document.getElementById(folderDomId) : null;
         if (!folderDomId || !folderContent) return;
 
-        const isOpen = window.getComputedStyle(folderContent).display !== 'none';
+        const inlineDisplay = folderContent.style.display;
+        const isOpen = pendingCreateOpenFolders.indexOf(folderDomId) !== -1
+            || (inlineDisplay ? inlineDisplay !== 'none' : window.getComputedStyle(folderContent).display !== 'none');
         localStorage.setItem('folder_' + folderDomId, isOpen ? 'open' : 'closed');
     });
 }
@@ -2216,7 +2261,8 @@ function createNoteOfType(noteType, globalFnNames) {
                         window.navigateToCreatedNoteInInternalTab(
                             data.note.id,
                             data.note.heading,
-                            data.note.workspace || selectedWorkspace
+                            data.note.workspace || selectedWorkspace,
+                            data.note.folder_id || targetFolderId
                         );
                     } else {
                         window.location.href = 'index.php?note=' + data.note.id;
@@ -2253,7 +2299,8 @@ function createNoteOfType(noteType, globalFnNames) {
                         window.navigateToCreatedNoteInInternalTab(
                             data.note.id,
                             data.note.heading,
-                            data.note.workspace || selectedWorkspace
+                            data.note.workspace || selectedWorkspace,
+                            data.note.folder_id || null
                         );
                     } else {
                         window.location.href = 'index.php?note=' + data.note.id;

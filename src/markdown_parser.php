@@ -73,6 +73,67 @@ function trimMarkdownTableWhitespace($text) {
     return trim((string)$text, " \t\n\r\v");
 }
 
+function getMarkdownTableCells($line) {
+    $trimmed = trimMarkdownTableWhitespace($line);
+    if ($trimmed === '' || strpos($trimmed, '|') === false) {
+        return [];
+    }
+
+    if (substr($trimmed, 0, 1) === '|') {
+        $trimmed = substr($trimmed, 1);
+    }
+    if (substr($trimmed, -1) === '|') {
+        $trimmed = substr($trimmed, 0, -1);
+    }
+
+    return array_map('trimMarkdownTableWhitespace', explode('|', $trimmed));
+}
+
+function isMarkdownTableRowLine($line) {
+    return count(getMarkdownTableCells($line)) > 0;
+}
+
+function isMarkdownTableSeparatorLine($line) {
+    $trimmed = trimMarkdownTableWhitespace($line);
+    if ($trimmed === '' || strpos($trimmed, '|') === false) {
+        return false;
+    }
+
+    $cells = getMarkdownTableCells($trimmed);
+    if (count($cells) === 0) {
+        return false;
+    }
+
+    foreach ($cells as $cell) {
+        if (!preg_match('/^:?-+:?$/', trimMarkdownTableWhitespace($cell))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function isMarkdownTableStart($line, $nextLine) {
+    if (!isMarkdownTableRowLine($line) || isMarkdownTableSeparatorLine($line) || !isMarkdownTableSeparatorLine($nextLine)) {
+        return false;
+    }
+
+    return count(getMarkdownTableCells($line)) === count(getMarkdownTableCells($nextLine));
+}
+
+function getMarkdownTableAlignments($line) {
+    return array_map(function($cell) {
+        $marker = trimMarkdownTableWhitespace($cell);
+        $alignLeft = strpos($marker, ':') === 0;
+        $alignRight = substr($marker, -1) === ':';
+
+        if ($alignLeft && $alignRight) return 'center';
+        if ($alignRight) return 'right';
+        if ($alignLeft) return 'left';
+        return '';
+    }, getMarkdownTableCells($line));
+}
+
 function renderMarkdownMermaidBlock($source) {
     $mermaidSource = trim(html_entity_decode((string)$source, ENT_QUOTES, 'UTF-8'));
     $escapedSource = htmlspecialchars($mermaidSource, ENT_QUOTES, 'UTF-8');
@@ -663,7 +724,7 @@ function parseMarkdown($text) {
                     preg_match('/^\s*[\*\-\+]\s+\[([ xX])\]\s+/', $nextLine) || // Task lists
                     preg_match('/^\s*[\*\-\+]\s+/', $nextLine) ||       // Unordered lists
                     preg_match('/^\s*\d+(?:\.\d+)*\.\s+/', $nextLine) || // Ordered lists
-                    preg_match('/^\s*\|.+\|\s*$/', $nextLine)           // Tables
+                    isMarkdownTableStart($nextLine, isset($lines[$nextNonEmptyIndex + 1]) ? $lines[$nextNonEmptyIndex + 1] : '') // Tables
                 );
             }
             
@@ -981,20 +1042,21 @@ function parseMarkdown($text) {
             continue;
         }
         
-        // Tables - detect table rows (supports multiline cells until the row closes with a trailing |)
-        if (preg_match('/^\s*\|/', $line)) {
+        // Tables - require a header separator row so plain pipe-delimited text stays editable as text.
+        if (isMarkdownTableStart($line, isset($lines[$i + 1]) ? $lines[$i + 1] : '')) {
             $flushParagraph();
             
             $tableRows = [];
-            $hasHeaderSeparator = false;
+            $tableAlignments = [];
+            $isFirstRow = true;
             
             // Collect all consecutive table rows
-            while ($i < count($lines) && preg_match('/^\s*\|/', $lines[$i])) {
+            while ($i < count($lines) && isMarkdownTableRowLine($lines[$i])) {
                 $currentLine = trimMarkdownTableWhitespace($lines[$i]);
                 
                 // Check if this is a header separator line (|---|---|)
-                if (preg_match('/^\|[\s\-:|]+\|$/', $currentLine)) {
-                    $hasHeaderSeparator = true;
+                if (isMarkdownTableSeparatorLine($currentLine)) {
+                    $tableAlignments = getMarkdownTableAlignments($currentLine);
                     $i++;
                     continue;
                 }
@@ -1003,7 +1065,7 @@ function parseMarkdown($text) {
                 while (!preg_match('/\|\s*$/', $logicalRow) && $i + 1 < count($lines)) {
                     $nextLine = trimMarkdownTableWhitespace($lines[$i + 1]);
 
-                    if ($nextLine === '') {
+                    if ($nextLine === '' || isMarkdownTableRowLine($nextLine)) {
                         break;
                     }
 
@@ -1012,8 +1074,11 @@ function parseMarkdown($text) {
                 }
                 
                 // Parse table cells
-                $cells = array_map('trimMarkdownTableWhitespace', array_slice(explode('|', $logicalRow), 1, -1));
-                $tableRows[] = $cells;
+                $tableRows[] = [
+                    'cells' => getMarkdownTableCells($logicalRow),
+                    'is_header' => $isFirstRow
+                ];
+                $isFirstRow = false;
                 $i++;
             }
             $i--; // Adjust because the for loop will increment
@@ -1024,14 +1089,16 @@ function parseMarkdown($text) {
                 
                 // Process rows
                 for ($r = 0; $r < count($tableRows); $r++) {
-                    $row = $tableRows[$r];
-                    $isHeaderRow = ($r === 0 && $hasHeaderSeparator);
+                    $row = $tableRows[$r]['cells'];
+                    $isHeaderRow = ($r === 0 && $tableRows[$r]['is_header']);
                     $cellTag = $isHeaderRow ? 'th' : 'td';
                     
                     $tableHTML .= '<tr>';
                     for ($c = 0; $c < count($row); $c++) {
                         $cellContent = $applyInlineStyles($row[$c]);
-                        $tableHTML .= '<' . $cellTag . '>' . $cellContent . '</' . $cellTag . '>';
+                        $alignment = isset($tableAlignments[$c]) ? $tableAlignments[$c] : '';
+                        $alignAttr = $alignment !== '' ? ' style="text-align: ' . $alignment . ';"' : '';
+                        $tableHTML .= '<' . $cellTag . $alignAttr . '>' . $cellContent . '</' . $cellTag . '>';
                     }
                     $tableHTML .= '</tr>';
                 }

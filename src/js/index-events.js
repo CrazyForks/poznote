@@ -16,6 +16,10 @@
 (function () {
     'use strict';
 
+    function isPublicWorkspaceReadOnly() {
+        return !!(document.body && document.body.classList.contains('public-workspace-readonly'));
+    }
+
     /**
      * Handle focus events using event delegation for note editing tracking
      * @param {Event} e - Focus event
@@ -431,6 +435,9 @@
                 }
                 break;
             case 'show-move-folder-dialog':
+                if (isPublicWorkspaceReadOnly()) {
+                    break;
+                }
                 if (noteId && typeof showMoveFolderDialog === 'function') {
                     const fId = target.dataset.folderId;
                     const fName = target.dataset.folder;
@@ -841,6 +848,29 @@
      */
     window.toggleCreateMenu = function () {
         closeSidebarMenu();
+        // Save IDs of currently-open folders to sessionStorage so they can be
+        // restored when returning from create.php (sessionStorage survives same-tab navigation).
+        var _openFolderIds = [];
+        try {
+            document.querySelectorAll('.folder-content').forEach(function (fc) {
+                var isOpen = fc.style.display ? fc.style.display !== 'none' : window.getComputedStyle(fc).display !== 'none';
+                if (fc.id && isOpen) {
+                    _openFolderIds.push(fc.id);
+                }
+            });
+            sessionStorage.setItem('poznote_create_open_folders', JSON.stringify(_openFolderIds));
+        } catch (e) {}
+        // Also persist to localStorage for the restoreFolderStates() mechanism
+        if (typeof window.persistFolderStatesFromDOM === 'function') {
+            window.persistFolderStatesFromDOM();
+        } else if (typeof persistFolderStatesFromDOM === 'function') {
+            persistFolderStatesFromDOM();
+        }
+        try {
+            _openFolderIds.forEach(function (folderDomId) {
+                localStorage.setItem('folder_' + folderDomId, 'open');
+            });
+        } catch (e) {}
         var workspace = (typeof getSelectedWorkspace === 'function' ? getSelectedWorkspace() : '') || '';
         window.location.href = 'create.php?workspace=' + encodeURIComponent(workspace);
     };
@@ -914,7 +944,8 @@
                         window.navigateToCreatedNoteInInternalTab(
                             data.note.id,
                             data.note.heading,
-                            data.note.workspace || window.selectedWorkspace || (typeof getSelectedWorkspace === 'function' ? getSelectedWorkspace() : '')
+                            data.note.workspace || window.selectedWorkspace || (typeof getSelectedWorkspace === 'function' ? getSelectedWorkspace() : ''),
+                            data.note.folder_id || noteData.folder_id
                         );
                     } else {
                         var ws = encodeURIComponent(window.selectedWorkspace || (typeof getSelectedWorkspace === 'function' ? getSelectedWorkspace() : ''));
@@ -954,7 +985,8 @@
                         window.navigateToCreatedNoteInInternalTab(
                             data.note.id,
                             data.note.heading,
-                            data.note.workspace || window.selectedWorkspace || (typeof getSelectedWorkspace === 'function' ? getSelectedWorkspace() : '')
+                            data.note.workspace || window.selectedWorkspace || (typeof getSelectedWorkspace === 'function' ? getSelectedWorkspace() : ''),
+                            data.note.folder_id || noteData.folder_id
                         );
                     } else {
                         var ws = encodeURIComponent(window.selectedWorkspace || (typeof getSelectedWorkspace === 'function' ? getSelectedWorkspace() : ''));

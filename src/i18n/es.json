@@ -490,6 +490,28 @@
     "confirm_delete": {
       "title": "Confirmar eliminación de espacio de trabajo",
       "message": "Eliminar espacio de trabajo \"{{workspace}}\"? Las notas serán movidas al espacio de trabajo de inicio."
+    },
+    "share": {
+      "actions": {
+        "enable": "Compartir",
+        "edit": "Editar uso compartido",
+        "copy_link": "Copiar enlace compartido",
+        "disable": "Dejar de compartir"
+      },
+      "confirm": {
+        "title": "Compartir espacio de trabajo",
+        "message": "Cualquier persona con la URL del espacio de trabajo \"{{workspace}}\" tendrá acceso a todas las notas y carpetas de este espacio de trabajo.\n\nNo podrá modificar nada. Solo podrá consultar el contenido.",
+        "confirm_button": "Compartir espacio de trabajo"
+      },
+      "messages": {
+        "url_copied": "¡Enlace compartido copiado al portapapeles!"
+      },
+      "errors": {
+        "copy_failed": "No se pudo copiar el enlace compartido"
+      },
+      "options": {
+        "require_login": "Requerir inicio de sesión en Poznote"
+      }
     }
   },
   "display": {
@@ -979,6 +1001,12 @@
       "message": "¿Qué desea eliminar?",
       "delete_link_only": "Eliminar solo este atajo",
       "delete_link_and_target": "Eliminar la nota y todos sus atajos"
+    },
+    "move_linked_note": {
+      "title": "Mover atajo",
+      "message": "¿Qué desea mover?",
+      "move_link_only": "Mover solo este atajo",
+      "move_target_note": "Mover la nota original"
     },
     "convert": {
       "title": "Convertir nota",

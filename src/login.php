@@ -45,6 +45,12 @@ try {
     $login_display_name = '';
     $currentLang = 'en';
 }
+
+$redirectAfter = oidc_sanitize_redirect($_POST['redirect'] ?? $_GET['redirect'] ?? ($_SESSION['post_login_redirect'] ?? null));
+if ($redirectAfter !== null) {
+    $_SESSION['post_login_redirect'] = $redirectAfter;
+}
+
 // Detect language change from selector
 $allowedLangs = ['en', 'fr', 'es', 'de', 'pt', 'zh-cn'];
 if (isset($_GET['lang'])) {
@@ -73,8 +79,13 @@ if (empty($_SESSION['csrf_token'])) {
 
 // If already authenticated, redirect to home
 if (isAuthenticated()) {
+    $redirectConfig = [];
+    if ($redirectAfter !== null) {
+        $redirectConfig['redirectAfter'] = $redirectAfter;
+        unset($_SESSION['post_login_redirect']);
+    }
     echo '<!DOCTYPE html><html><head>';
-    echo '<script type="application/json" id="workspace-redirect-data">{}</script>';
+    echo '<script type="application/json" id="workspace-redirect-data">' . json_encode($redirectConfig) . '</script>';
     echo '<script src="js/workspace-redirect.js"></script>';
     echo '</head><body>' . t_h('login.redirecting', [], 'Redirecting...', $currentLang ?? 'en') . '</body></html>';
     exit;
@@ -99,8 +110,13 @@ if ($_POST && isset($_POST['username']) && isset($_POST['password'])) {
     // User profile is automatically selected based on credentials (no dropdown)
     // authenticate() handles matching credentials to the appropriate profile
     if (authenticate($username, $password, $rememberMe)) {
+        $redirectConfig = [];
+        if ($redirectAfter !== null) {
+            $redirectConfig['redirectAfter'] = $redirectAfter;
+            unset($_SESSION['post_login_redirect']);
+        }
         echo '<!DOCTYPE html><html><head>';
-        echo '<script type="application/json" id="workspace-redirect-data">{}</script>';
+        echo '<script type="application/json" id="workspace-redirect-data">' . json_encode($redirectConfig) . '</script>';
         echo '<script src="js/workspace-redirect.js"></script>';
         echo '</head><body>' . t_h('login.redirecting', [], 'Redirecting...', $currentLang ?? 'en') . '</body></html>';
         exit;
@@ -221,6 +237,9 @@ if (isset($_GET['oidc_error'])) {
         <?php if ($showNormalLogin): ?>
         <form method="POST">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES); ?>">
+            <?php if ($redirectAfter !== null): ?>
+                <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirectAfter, ENT_QUOTES); ?>">
+            <?php endif; ?>
             <div class="form-group">
                 <input type="text" id="username" name="username" placeholder="<?php echo t_h('login.fields.username_or_email', [], 'Username or Email', $currentLang ?? 'en'); ?>" required autofocus autocomplete="username">
             </div>
@@ -275,7 +294,8 @@ if (isset($_GET['oidc_error'])) {
         'focusOidc' => !$showNormalLogin && function_exists('oidc_is_enabled') && oidc_is_enabled(),
         'showPasswordTitle' => t('login.show_password', [], 'Show password', $currentLang ?? 'en'),
         'hidePasswordTitle' => t('login.hide_password', [], 'Hide password', $currentLang ?? 'en'),
-        'oidcEnabled' => function_exists('oidc_is_enabled') && oidc_is_enabled()
+        'oidcEnabled' => function_exists('oidc_is_enabled') && oidc_is_enabled(),
+        'redirectAfter' => $redirectAfter
     ];
     ?>
     <script type="application/json" id="login-config"><?php echo json_encode($loginConfig); ?></script>

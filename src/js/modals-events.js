@@ -114,6 +114,16 @@
                     moveNoteToFolder();
                 }
                 break;
+            case 'move-linked-note-shortcut':
+                if (typeof moveLinkedNoteShortcutOnly === 'function') {
+                    moveLinkedNoteShortcutOnly();
+                }
+                break;
+            case 'move-linked-note-target':
+                if (typeof moveLinkedNoteTarget === 'function') {
+                    moveLinkedNoteTarget();
+                }
+                break;
 
             // Workspace modal actions (workspaces.php)
             case 'close-move-modal':

@@ -60,6 +60,34 @@ document.addEventListener('DOMContentLoaded', function () {
     // Restore folder states from localStorage
     restoreFolderStates();
 
+    // Restore open folders after returning from create.php
+    // toggleCreateMenu saves open folder IDs to sessionStorage before navigating away.
+    try {
+        var _createFlowFolders = sessionStorage.getItem('poznote_create_open_folders');
+        if (_createFlowFolders) {
+            sessionStorage.removeItem('poznote_create_open_folders');
+            var _openIds = JSON.parse(_createFlowFolders);
+            if (Array.isArray(_openIds)) {
+                _openIds.forEach(function (folderId) {
+                    var fc = document.getElementById(folderId);
+                    if (!fc) return;
+                    fc.style.display = 'block';
+                    localStorage.setItem('folder_' + folderId, 'open');
+                    var nameEl = document.querySelector('.folder-name[data-folder-dom-id="' + folderId + '"]');
+                    var toggleEl = nameEl ? nameEl.closest('.folder-toggle') : null;
+                    var icon = toggleEl ? toggleEl.querySelector('.folder-icon') : null;
+                    if (icon && icon.getAttribute('data-custom-icon') !== 'true') {
+                        var header = nameEl ? nameEl.closest('.folder-header') : null;
+                        if (!header || header.getAttribute('data-folder') !== 'Favorites') {
+                            icon.classList.remove('lucide-folder');
+                            icon.classList.add('lucide-folder-open');
+                        }
+                    }
+                });
+            }
+        }
+    } catch (e) {}
+
     // Restore checklist values from data attributes (after page reload)
     const noteentry = document.querySelector('.noteentry');
     if (noteentry) {
