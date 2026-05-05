@@ -515,6 +515,265 @@ function validateCreateWorkspaceForm() {
     return true;
 }
 
+function getWorkspaceShareText(attributeName, fallback) {
+    if (!document.body) return fallback;
+    return document.body.getAttribute('data-txt-' + attributeName) || fallback;
+}
+
+function getWorkspaceShareConfirmTitle() {
+    return wsTr('workspaces.share.confirm.title', {}, 'Share workspace');
+}
+
+function getWorkspaceShareConfirmMessage(workspaceName) {
+    return wsTr(
+        'workspaces.share.confirm.message',
+        { workspace: workspaceName },
+        'Anyone with the URL for workspace "{{workspace}}" will have access to all notes and folders in this workspace.\n\nThey will not be able to modify anything. They will only be able to view the content.'
+    );
+}
+
+function getWorkspaceShareConfirmButtonText() {
+    return wsTr('workspaces.share.confirm.confirm_button', {}, 'Share workspace');
+}
+
+function handleWorkspaceShareToggleSubmit(event) {
+    var form = event.target;
+    if (!form || !form.classList || !form.classList.contains('workspace-share-toggle-form')) {
+        return;
+    }
+
+    if (form.getAttribute('data-confirmed-submit') === '1') {
+        form.removeAttribute('data-confirmed-submit');
+        return;
+    }
+
+    var actionInput = form.querySelector('input[name="action"]');
+    if (!actionInput || actionInput.value !== 'upsert_readonly_share') {
+        return;
+    }
+
+    event.preventDefault();
+
+    var workspaceInput = form.querySelector('input[name="name"]');
+    var workspaceName = workspaceInput ? workspaceInput.value : '';
+    var title = getWorkspaceShareConfirmTitle();
+    var message = getWorkspaceShareConfirmMessage(workspaceName);
+    var confirmText = getWorkspaceShareConfirmButtonText();
+
+    if (window.modalAlert && typeof window.modalAlert.confirm === 'function') {
+        window.modalAlert.confirm(message, title, {
+            alertType: 'info',
+            confirmText: confirmText
+        }).then(function (confirmed) {
+            if (!confirmed) return;
+            form.setAttribute('data-confirmed-submit', '1');
+            form.submit();
+        });
+        return;
+    }
+
+    if (window.confirm(message)) {
+        form.setAttribute('data-confirmed-submit', '1');
+        form.submit();
+    }
+}
+
+function setWorkspaceShareVisibility(element, visible) {
+    if (!element) return;
+    if (visible) {
+        element.classList.remove('initially-hidden');
+    } else {
+        element.classList.add('initially-hidden');
+    }
+}
+
+function updateWorkspaceSharePanel(panel, shareState) {
+    if (!panel) return;
+
+    var isPublic = !!shareState.public;
+    var badge = panel.querySelector('.workspace-share-badge');
+    var saveButton = panel.querySelector('.btn-save-readonly-share');
+    var openLink = panel.querySelector('.btn-open-readonly-share');
+    var copyButton = panel.querySelector('.btn-copy-readonly-share');
+    var disableButton = panel.querySelector('.btn-disable-readonly-share');
+    var publicLink = panel.querySelector('.workspace-share-link');
+
+    panel.setAttribute('data-public-active', isPublic ? '1' : '0');
+
+    if (badge) {
+        badge.textContent = isPublic
+            ? getWorkspaceShareText('workspace-share-enabled', 'Public read-only enabled')
+            : getWorkspaceShareText('workspace-share-disabled', 'Not shared publicly');
+        badge.classList.toggle('is-enabled', isPublic);
+        badge.classList.toggle('is-disabled', !isPublic);
+    }
+
+    setWorkspaceShareVisibility(saveButton, !isPublic);
+
+    if (openLink) {
+        if (isPublic && shareState.url) {
+            openLink.setAttribute('href', shareState.url);
+        } else {
+            openLink.setAttribute('href', '#');
+        }
+        setWorkspaceShareVisibility(openLink, isPublic && !!shareState.url);
+    }
+
+    if (copyButton) {
+        copyButton.setAttribute('data-url', isPublic ? (shareState.url || '') : '');
+        setWorkspaceShareVisibility(copyButton, isPublic && !!shareState.url);
+    }
+
+    if (disableButton) {
+        setWorkspaceShareVisibility(disableButton, isPublic);
+    }
+
+    if (publicLink) {
+        publicLink.textContent = isPublic ? (shareState.url || '') : '';
+        publicLink.setAttribute('href', isPublic ? (shareState.url || '#') : '#');
+        setWorkspaceShareVisibility(publicLink, isPublic && !!shareState.url);
+    }
+}
+
+function copyWorkspaceShareUrl(url) {
+    if (!url) {
+        return Promise.reject(new Error('Missing URL'));
+    }
+
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        return navigator.clipboard.writeText(url);
+    }
+
+    return new Promise(function (resolve, reject) {
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        input.setSelectionRange(0, input.value.length);
+
+        try {
+            var copied = document.execCommand('copy');
+            document.body.removeChild(input);
+            if (copied) {
+                resolve();
+            } else {
+                reject(new Error('Copy command failed'));
+            }
+        } catch (err) {
+            document.body.removeChild(input);
+            reject(err);
+        }
+    });
+}
+
+function handleWorkspaceReadonlyShareSave(e) {
+    var button = e.target.closest ? e.target.closest('.btn-save-readonly-share') : null;
+    if (!button) return false;
+
+    var panel = button.closest('.workspace-share-panel');
+    if (!panel) return true;
+
+    var workspaceName = button.getAttribute('data-ws') || panel.getAttribute('data-ws') || '';
+
+    button.disabled = true;
+
+    var params = new URLSearchParams({
+        action: 'upsert_readonly_share',
+        name: workspaceName
+    });
+
+    fetch('workspaces.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        },
+        body: params.toString()
+    })
+        .then(function (resp) { return resp.json(); })
+        .then(function (json) {
+            button.disabled = false;
+            if (json && json.success) {
+                updateWorkspaceSharePanel(panel, {
+                    public: true,
+                    url: json.url || ''
+                });
+                showAjaxAlert(json.message || getWorkspaceShareText('workspace-share-enabled', 'Public read-only enabled'), 'success');
+            } else {
+                showAjaxAlert((json && json.error) || wsTr('workspaces.alerts.unknown_error', {}, 'Unknown error'), 'danger');
+            }
+        })
+        .catch(function (err) {
+            button.disabled = false;
+            console.error('Error saving workspace share:', err);
+            showAjaxAlert(wsTr('workspaces.share.errors.save_failed', {}, 'Failed to save read-only workspace link'), 'danger');
+        });
+
+    return true;
+}
+
+function handleWorkspaceReadonlyShareDisable(e) {
+    var button = e.target.closest ? e.target.closest('.btn-disable-readonly-share') : null;
+    if (!button) return false;
+
+    var panel = button.closest('.workspace-share-panel');
+    if (!panel) return true;
+
+    var workspaceName = button.getAttribute('data-ws') || panel.getAttribute('data-ws') || '';
+    button.disabled = true;
+
+    var params = new URLSearchParams({
+        action: 'disable_readonly_share',
+        name: workspaceName
+    });
+
+    fetch('workspaces.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        },
+        body: params.toString()
+    })
+        .then(function (resp) { return resp.json(); })
+        .then(function (json) {
+            button.disabled = false;
+            if (json && json.success) {
+                updateWorkspaceSharePanel(panel, { public: false, token: '', url: '' });
+                showAjaxAlert(json.message || getWorkspaceShareText('workspace-share-disabled', 'Not shared publicly'), 'success');
+            } else {
+                showAjaxAlert((json && json.error) || wsTr('workspaces.alerts.unknown_error', {}, 'Unknown error'), 'danger');
+            }
+        })
+        .catch(function (err) {
+            button.disabled = false;
+            console.error('Error disabling workspace share:', err);
+            showAjaxAlert(wsTr('workspaces.share.errors.disable_failed', {}, 'Failed to disable read-only workspace link'), 'danger');
+        });
+
+    return true;
+}
+
+function handleWorkspaceReadonlyShareCopy(e) {
+    var button = e.target.closest ? e.target.closest('.btn-copy-readonly-share') : null;
+    if (!button) return false;
+
+    var url = button.getAttribute('data-url') || '';
+    copyWorkspaceShareUrl(url)
+        .then(function () {
+            showAjaxAlert(getWorkspaceShareText('workspace-share-copy-success', 'URL copied!'), 'success');
+        })
+        .catch(function (err) {
+            console.error('Error copying workspace share URL:', err);
+            showAjaxAlert(wsTr('workspaces.share.errors.copy_failed', {}, 'Failed to copy URL'), 'danger');
+        });
+
+    return true;
+}
+
 // ========== WORKSPACE ACTION HANDLERS ==========
 // Event handlers for rename, select, delete, and move operations
 function handleRenameButtonClick(e) {
@@ -1026,6 +1285,12 @@ function initializeWorkspacesPage() {
     document.addEventListener('click', handleSelectButtonClick);
     document.addEventListener('click', handleDeleteButtonClick);
     document.addEventListener('click', handleMoveButtonClick);
+    document.addEventListener('submit', handleWorkspaceShareToggleSubmit, true);
+    document.addEventListener('click', function (event) {
+        if (handleWorkspaceReadonlyShareSave(event)) return;
+        if (handleWorkspaceReadonlyShareDisable(event)) return;
+        if (handleWorkspaceReadonlyShareCopy(event)) return;
+    });
 
     // Create workspace form
     var createForm = document.getElementById('create-workspace-form');

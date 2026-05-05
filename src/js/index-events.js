@@ -16,6 +16,10 @@
 (function () {
     'use strict';
 
+    function isPublicWorkspaceReadOnly() {
+        return !!(document.body && document.body.classList.contains('public-workspace-readonly'));
+    }
+
     /**
      * Handle focus events using event delegation for note editing tracking
      * @param {Event} e - Focus event
@@ -431,6 +435,9 @@
                 }
                 break;
             case 'show-move-folder-dialog':
+                if (isPublicWorkspaceReadOnly()) {
+                    break;
+                }
                 if (noteId && typeof showMoveFolderDialog === 'function') {
                     const fId = target.dataset.folderId;
                     const fName = target.dataset.folder;

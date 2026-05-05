@@ -491,6 +491,17 @@
     "confirm_delete": {
       "title": "确认删除工作区",
       "message": "删除工作区 \"{{workspace}}\"？笔记将被移动到启动工作区。"
+    },
+    "share": {
+      "actions": {
+        "enable": "共享",
+        "disable": "取消共享"
+      },
+      "confirm": {
+        "title": "共享工作区",
+        "message": "任何拥有工作区“{{workspace}}”URL 的人都可以访问此工作区中的所有笔记和文件夹。\n\n他们无法修改任何内容，只能查看。",
+        "confirm_button": "共享工作区"
+      }
     }
   },
   "display": {

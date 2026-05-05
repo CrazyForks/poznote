@@ -22,12 +22,25 @@ class WorkspacesController {
      */
     public function index() {
         try {
-            $stmt = $this->con->query("SELECT name, created FROM workspaces ORDER BY name");
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if (function_exists('isPublicWorkspaceAccessActive') && isPublicWorkspaceAccessActive()) {
+                $publicWorkspaceName = getPublicWorkspaceName();
+                $rows = [];
+
+                if (is_string($publicWorkspaceName) && $publicWorkspaceName !== '') {
+                    $stmt = $this->con->prepare('SELECT name, created FROM workspaces WHERE name = ? ORDER BY name');
+                    $stmt->execute([$publicWorkspaceName]);
+                    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                }
+            } else {
+                $stmt = $this->con->query("SELECT name, created FROM workspaces ORDER BY name");
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
             
             // Get current user
             $currentUser = getCurrentUser();
-            $username = $currentUser['username'] ?? null;
+            $username = (function_exists('isPublicWorkspaceAccessActive') && isPublicWorkspaceAccessActive())
+                ? null
+                : ($currentUser['username'] ?? null);
             
             echo json_encode([
                 'success' => true,

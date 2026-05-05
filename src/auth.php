@@ -241,6 +241,253 @@ function isAuthenticated() {
     return false;
 }
 
+function normalizePublicWorkspaceName(string $workspaceName): string {
+    $workspaceName = trim($workspaceName);
+    if ($workspaceName === '') {
+        return '';
+    }
+
+    return function_exists('mb_strtolower')
+        ? mb_strtolower($workspaceName, 'UTF-8')
+        : strtolower($workspaceName);
+}
+
+function buildPublicWorkspaceRegistryKey(string $workspaceName): string {
+    $normalizedWorkspaceName = normalizePublicWorkspaceName($workspaceName);
+    return $normalizedWorkspaceName !== '' ? 'workspace:' . $normalizedWorkspaceName : '';
+}
+
+function getPublicWorkspaceAccess(): ?array {
+    $access = $_SESSION['public_workspace_access'] ?? null;
+    if (!is_array($access)) {
+        return null;
+    }
+
+    $workspaceName = trim((string)($access['workspace_name'] ?? ''));
+    $userId = isset($access['user_id']) ? (int)$access['user_id'] : 0;
+    if ($workspaceName === '' || $userId <= 0) {
+        unset($_SESSION['public_workspace_access']);
+        return null;
+    }
+
+    $access['workspace_name'] = $workspaceName;
+    $access['user_id'] = $userId;
+    return $access;
+}
+
+function getPublicWorkspaceName(): ?string {
+    $access = getPublicWorkspaceAccess();
+    return $access['workspace_name'] ?? null;
+}
+
+function isPublicWorkspaceAccessActive(): bool {
+    return getPublicWorkspaceAccess() !== null;
+}
+
+function getRequestedWorkspaceNameForPublicAccess(): string {
+    if (isset($_GET['workspace']) && is_string($_GET['workspace']) && trim($_GET['workspace']) !== '') {
+        return trim($_GET['workspace']);
+    }
+
+    if (isset($_POST['workspace']) && is_string($_POST['workspace']) && trim($_POST['workspace']) !== '') {
+        return trim($_POST['workspace']);
+    }
+
+    $workspaceName = getPublicWorkspaceName();
+    return $workspaceName !== null ? $workspaceName : '';
+}
+
+function resolvePublicWorkspaceAccess(string $workspaceName): ?array {
+    $registryKey = buildPublicWorkspaceRegistryKey($workspaceName);
+    if ($registryKey === '') {
+        return null;
+    }
+
+    require_once __DIR__ . '/users/db_master.php';
+    require_once __DIR__ . '/users/UserDataManager.php';
+
+    try {
+        $masterCon = getMasterConnection();
+        $stmt = $masterCon->prepare("SELECT user_id, target_id FROM shared_links WHERE token = ? AND target_type = 'workspace' LIMIT 1");
+        $stmt->execute([$registryKey]);
+        $registryRow = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$registryRow) {
+            return null;
+        }
+
+        $userId = (int)$registryRow['user_id'];
+        $targetId = (int)$registryRow['target_id'];
+        if ($userId <= 0 || $targetId <= 0) {
+            return null;
+        }
+
+        $user = getUserProfileById($userId);
+        if (!$user || !(bool)($user['active'] ?? false)) {
+            return null;
+        }
+
+        $userDataManager = new UserDataManager($userId);
+        $dbPath = $userDataManager->getUserDatabasePath();
+        if (!is_file($dbPath)) {
+            return null;
+        }
+
+        $userCon = new PDO('sqlite:' . $dbPath);
+        $userCon->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $userCon->exec('PRAGMA busy_timeout = 5000');
+
+        $stmt = $userCon->prepare('SELECT id, workspace_name FROM shared_workspaces WHERE id = ? LIMIT 1');
+        $stmt->execute([$targetId]);
+        $sharedWorkspace = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$sharedWorkspace) {
+            return null;
+        }
+
+        $resolvedWorkspaceName = trim((string)($sharedWorkspace['workspace_name'] ?? ''));
+        if ($resolvedWorkspaceName === '' || normalizePublicWorkspaceName($resolvedWorkspaceName) !== normalizePublicWorkspaceName($workspaceName)) {
+            return null;
+        }
+
+        $stmt = $userCon->prepare('SELECT COUNT(*) FROM workspaces WHERE name = ?');
+        $stmt->execute([$resolvedWorkspaceName]);
+        if ((int)$stmt->fetchColumn() === 0) {
+            return null;
+        }
+
+        return [
+            'user_id' => $userId,
+            'username' => (string)($user['username'] ?? ''),
+            'workspace_name' => $resolvedWorkspaceName,
+            'target_id' => $targetId,
+            'registry_key' => $registryKey,
+        ];
+    } catch (Exception $e) {
+        error_log('Poznote public workspace access failed: ' . $e->getMessage());
+        return null;
+    }
+}
+
+function activatePublicWorkspaceAccess(array $workspaceAccess): void {
+    $userId = (int)($workspaceAccess['user_id'] ?? 0);
+    $workspaceName = trim((string)($workspaceAccess['workspace_name'] ?? ''));
+    if ($userId <= 0 || $workspaceName === '') {
+        return;
+    }
+
+    $_SESSION['authenticated'] = true;
+    $_SESSION['user_id'] = $userId;
+    $_SESSION['user'] = [
+        'id' => $userId,
+        'username' => (string)($workspaceAccess['username'] ?? ''),
+        'is_admin' => false,
+        '_public_workspace' => true,
+    ];
+    $_SESSION['auth_method'] = 'public_workspace';
+    $_SESSION['public_workspace_access'] = [
+        'user_id' => $userId,
+        'workspace_name' => $workspaceName,
+        'target_id' => (int)($workspaceAccess['target_id'] ?? 0),
+        'registry_key' => (string)($workspaceAccess['registry_key'] ?? ''),
+        'activated_at' => time(),
+    ];
+}
+
+function maybeAuthenticatePublicWorkspaceRequest(): bool {
+    if (isAuthenticated()) {
+        return true;
+    }
+
+    $workspaceName = getRequestedWorkspaceNameForPublicAccess();
+    if ($workspaceName === '') {
+        return false;
+    }
+
+    $workspaceAccess = resolvePublicWorkspaceAccess($workspaceName);
+    if ($workspaceAccess === null) {
+        return false;
+    }
+
+    activatePublicWorkspaceAccess($workspaceAccess);
+    return true;
+}
+
+function getPublicWorkspaceRedirectUrl(): string {
+    $workspaceName = getPublicWorkspaceName();
+    if ($workspaceName === null || $workspaceName === '') {
+        return 'index.php';
+    }
+
+    return 'index.php?workspace=' . urlencode($workspaceName);
+}
+
+function denyPublicWorkspaceAccessResponse(string $message, int $code = 403): void {
+    http_response_code($code);
+
+    $acceptHeader = (string)($_SERVER['HTTP_ACCEPT'] ?? '');
+    $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+    $isJsonRequest = strpos($acceptHeader, 'application/json') !== false || strpos($requestUri, '/api/') !== false;
+
+    if ($isJsonRequest) {
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'error' => $message,
+        ]);
+    } else {
+        echo htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    exit;
+}
+
+function denyPublicWorkspaceWriteAccess(string $message = 'This public workspace is read-only'): void {
+    if (!isPublicWorkspaceAccessActive()) {
+        return;
+    }
+
+    denyPublicWorkspaceAccessResponse($message, 403);
+}
+
+function enforcePublicWorkspaceRequestAccess(): void {
+    if (!isPublicWorkspaceAccessActive()) {
+        return;
+    }
+
+    $requestMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    if (!in_array($requestMethod, ['GET', 'HEAD', 'OPTIONS'], true)) {
+        denyPublicWorkspaceWriteAccess();
+    }
+
+    $scriptName = (string)($_SERVER['SCRIPT_NAME'] ?? '');
+    $restrictedScripts = [
+        '/home.php',
+        '/favorites.php',
+        '/notes_manager.php',
+        '/trash.php',
+        '/settings.php',
+        '/workspaces.php',
+        '/create.php',
+        '/shared.php',
+        '/backup_export.php',
+        '/restore_import.php',
+        '/git_sync.php',
+        '/excalidraw_editor.php',
+        '/markdown_syntax.php',
+    ];
+
+    foreach ($restrictedScripts as $restrictedScript) {
+        if ($scriptName === $restrictedScript || str_ends_with($scriptName, $restrictedScript)) {
+            header('Location: ' . getPublicWorkspaceRedirectUrl());
+            exit;
+        }
+    }
+
+    if (strpos($scriptName, '/admin/') !== false) {
+        header('Location: ' . getPublicWorkspaceRedirectUrl());
+        exit;
+    }
+}
+
 /**
  * Authenticate with username/password
  */
@@ -322,10 +569,12 @@ function logout() {
 }
 
 function requireAuth() {
-    if (!isAuthenticated()) {
+    if (!isAuthenticated() && !maybeAuthenticatePublicWorkspaceRequest()) {
         header('Location: login.php');
         exit;
     }
+
+    enforcePublicWorkspaceRequestAccess();
 }
 
 function getMcpServiceTokenPath(): string {
@@ -622,6 +871,12 @@ function authenticateApiBasicAuth(bool $requireAdmin = false): array {
 function requireApiAuth() {
     // For API endpoints, check session first
     if (isAuthenticated()) {
+        if (isPublicWorkspaceAccessActive()) {
+            $requestMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+            if (!in_array($requestMethod, ['GET', 'HEAD', 'OPTIONS'], true)) {
+                denyPublicWorkspaceWriteAccess();
+            }
+        }
         return;
     }
     
@@ -763,6 +1018,9 @@ function requireAdmin() {
 function requireApiAuthAdmin() {
     // For API endpoints, check session first
     if (isAuthenticated()) {
+        if (isPublicWorkspaceAccessActive()) {
+            denyPublicWorkspaceAccessResponse('This endpoint is not available in public workspace mode', 403);
+        }
         return;
     }
     

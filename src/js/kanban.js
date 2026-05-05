@@ -10,10 +10,26 @@
     let draggedCard = null;
     let draggedFromFolderId = null;
 
+    function isPublicWorkspaceReadOnly() {
+        return !!(document.body && document.body.classList.contains('public-workspace-readonly'));
+    }
+
+    function syncKanbanCardDragState() {
+        const isReadOnly = isPublicWorkspaceReadOnly();
+        document.querySelectorAll('.kanban-card').forEach((card) => {
+            if (isReadOnly) {
+                card.removeAttribute('draggable');
+                card.draggable = false;
+            }
+        });
+    }
+
     /**
      * Initialization called either on DOMContentLoaded or manually when content is loaded via AJAX
      */
     function init() {
+        syncKanbanCardDragState();
+
         // Document-level delegation ensures listeners work even when content is replaced
         if (window._kanbanInitialized) {
             return;
@@ -29,6 +45,11 @@
     function setupDelegatedEvents() {
         // Drag Start
         document.addEventListener('dragstart', (e) => {
+            if (isPublicWorkspaceReadOnly()) {
+                e.preventDefault();
+                return;
+            }
+
             const card = e.target.closest('.kanban-card');
             if (!card) return;
 
@@ -50,6 +71,10 @@
 
         // Drag End
         document.addEventListener('dragend', (e) => {
+            if (isPublicWorkspaceReadOnly()) {
+                return;
+            }
+
             const card = e.target.closest('.kanban-card');
             if (!card) return;
 
@@ -67,6 +92,10 @@
 
         // Drag Over - CRITICAL: must prevent default to allow drop
         document.addEventListener('dragover', (e) => {
+            if (isPublicWorkspaceReadOnly()) {
+                return;
+            }
+
             const columnContent = e.target.closest('.kanban-column-content');
             if (!columnContent) return;
 
@@ -77,6 +106,10 @@
 
         // Drag Enter
         document.addEventListener('dragenter', (e) => {
+            if (isPublicWorkspaceReadOnly()) {
+                return;
+            }
+
             const columnContent = e.target.closest('.kanban-column-content');
             if (!columnContent) return;
 
@@ -87,6 +120,10 @@
 
         // Drag Leave
         document.addEventListener('dragleave', (e) => {
+            if (isPublicWorkspaceReadOnly()) {
+                return;
+            }
+
             const columnContent = e.target.closest('.kanban-column-content');
             if (!columnContent) return;
 
@@ -100,6 +137,10 @@
 
         // Drop
         document.addEventListener('drop', async (e) => {
+            if (isPublicWorkspaceReadOnly()) {
+                return;
+            }
+
             const columnContent = e.target.closest('.kanban-column-content');
             if (!columnContent) return;
 

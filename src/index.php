@@ -249,6 +249,7 @@ if ($width_value !== false && $width_value !== '' && $width_value !== '0' && $wi
     <link type="text/css" rel="stylesheet" href="css/folder-icon-modal.css?v=<?php echo $v; ?>"/>
     <link type="text/css" rel="stylesheet" href="css/kanban.css?v=<?php echo $v; ?>"/>
     <link type="text/css" rel="stylesheet" href="css/background-image.css?v=<?php echo $v; ?>"/>
+    <link type="text/css" rel="stylesheet" href="css/public-workspace-readonly.css?v=<?php echo $v; ?>"/>
     <link type="text/css" rel="stylesheet" href="css/dark-mode/variables.css?v=<?php echo $v; ?>"/>
     <link type="text/css" rel="stylesheet" href="css/dark-mode/layout.css?v=<?php echo $v; ?>"/>
     <link type="text/css" rel="stylesheet" href="css/dark-mode/menus.css?v=<?php echo $v; ?>"/>
@@ -329,6 +330,10 @@ if ($pref && isset($allowed_sorts[$pref])) {
 
 // Set body classes
 $body_classes = trim($extra_body_classes);
+$isPublicWorkspaceReadonly = function_exists('isPublicWorkspaceAccessActive') && isPublicWorkspaceAccessActive();
+if ($isPublicWorkspaceReadonly) {
+    $body_classes = trim($body_classes . ' public-workspace-readonly');
+}
 ?>
 
 <body<?php echo $body_classes ? ' class="' . htmlspecialchars($body_classes, ENT_QUOTES) . '"' : ''; ?>>
@@ -379,17 +384,19 @@ $body_classes = trim($extra_body_classes);
                 <i class="lucide lucide-caret-down workspace-dropdown-icon"></i>
             </div>
             <div class="sidebar-title-actions">
-                <button class="sidebar-home<?php echo $notifications_count > 0 ? ' has-notifications-dot' : ''; ?>" data-action="navigate-to-home" title="<?php echo t_h('sidebar.home', [], 'Dashboard'); ?>">
-                    <i class="lucide lucide-layout-dashboard"></i>
-                    <span class="sidebar-notifications-dot" aria-hidden="true"></span>
-                </button>
-                <button class="sidebar-settings" data-action="navigate-to-settings" title="<?php echo t_h('sidebar.settings', [], 'Settings'); ?>">
-                    <i class="lucide lucide-settings"></i>
-                    <span class="update-badge update-badge-hidden"></span>
-                </button>
-                <button class="sidebar-plus" data-action="toggle-create-menu" title="<?php echo t_h('sidebar.create'); ?>">
-                    <i class="lucide lucide-plus-circle"></i>
-                </button>
+                <?php if (!$isPublicWorkspaceReadonly): ?>
+                    <button class="sidebar-home<?php echo $notifications_count > 0 ? ' has-notifications-dot' : ''; ?>" data-action="navigate-to-home" title="<?php echo t_h('sidebar.home', [], 'Dashboard'); ?>">
+                        <i class="lucide lucide-layout-dashboard"></i>
+                        <span class="sidebar-notifications-dot" aria-hidden="true"></span>
+                    </button>
+                    <button class="sidebar-settings" data-action="navigate-to-settings" title="<?php echo t_h('sidebar.settings', [], 'Settings'); ?>">
+                        <i class="lucide lucide-settings"></i>
+                        <span class="update-badge update-badge-hidden"></span>
+                    </button>
+                    <button class="sidebar-plus" data-action="toggle-create-menu" title="<?php echo t_h('sidebar.create'); ?>">
+                        <i class="lucide lucide-plus-circle"></i>
+                    </button>
+                <?php endif; ?>
             </div>
 
             <div class="workspace-menu" id="workspaceMenu"></div>
@@ -415,7 +422,8 @@ $body_classes = trim($extra_body_classes);
             'userId' => $_SESSION['user_id'] ?? null,
             'userEntriesPath' => "data/users/{$_SESSION['user_id']}/entries/",
             'defaultNoteSortType' => $note_list_sort_type,
-            'isAdmin' => function_exists('isCurrentUserAdmin') && isCurrentUserAdmin()
+            'isAdmin' => function_exists('isCurrentUserAdmin') && isCurrentUserAdmin(),
+            'isPublicWorkspaceAccess' => $isPublicWorkspaceReadonly
         ];
         if ($note != '') {
             $config_data['currentNoteFolder'] = $current_note_folder ?? '';
@@ -566,44 +574,42 @@ $body_classes = trim($extra_body_classes);
                     // Home button (mobile only)
                     echo '<button type="button" class="toolbar-btn btn-home mobile-home-btn" title="' . t_h('editor.toolbar.back_to_notes') . '" data-action="scroll-to-left-column"><i class="lucide lucide-home"></i></button>';
                     
-                    // Text formatting buttons (save button removed - auto-save is now automatic)
-                    echo '<button type="button" class="toolbar-btn btn-bold text-format-btn" title="' . t_h('editor.toolbar.bold') . '" data-action="exec-bold"><i class="lucide lucide-bold"></i></button>';
-                    echo '<button type="button" class="toolbar-btn btn-italic text-format-btn" title="' . t_h('editor.toolbar.italic') . '" data-action="exec-italic"><i class="lucide lucide-italic"></i></button>';
-                    echo '<button type="button" class="toolbar-btn btn-underline text-format-btn" title="' . t_h('editor.toolbar.underline') . '" data-action="exec-underline"><i class="lucide lucide-underline"></i></button>';
-                    echo '<button type="button" class="toolbar-btn btn-strikethrough text-format-btn" title="' . t_h('editor.toolbar.strikethrough') . '" data-action="exec-strikethrough"><i class="lucide lucide-strikethrough"></i></button>';
-                    echo '<button type="button" class="toolbar-btn btn-link text-format-btn" title="' . t_h('editor.toolbar.link') . '" data-action="add-link"><i class="lucide lucide-link"></i></button>';
-                    echo '<button type="button" class="toolbar-btn btn-color text-format-btn" title="' . t_h('editor.toolbar.text_color') . '" data-action="toggle-red-color"><i class="lucide lucide-palette"></i></button>';
-                    echo '<button type="button" class="toolbar-btn btn-highlight text-format-btn" title="' . t_h('editor.toolbar.highlight') . '" data-action="toggle-yellow-highlight"><i class="lucide lucide-paintbrush"></i></button>';
-                    if ($note_type !== 'markdown') {
-                        echo '<button type="button" class="toolbar-btn btn-list-ul text-format-btn" title="' . t_h('editor.toolbar.bullet_list') . '" data-action="exec-unordered-list"><i class="lucide lucide-list-ul"></i></button>';
-                        echo '<button type="button" class="toolbar-btn btn-list-ol text-format-btn" title="' . t_h('editor.toolbar.numbered_list') . '" data-action="exec-ordered-list"><i class="lucide lucide-list-ol"></i></button>';
+                    if (!$isPublicWorkspaceReadonly) {
+                        // Text formatting buttons (save button removed - auto-save is now automatic)
+                        echo '<button type="button" class="toolbar-btn btn-bold text-format-btn" title="' . t_h('editor.toolbar.bold') . '" data-action="exec-bold"><i class="lucide lucide-bold"></i></button>';
+                        echo '<button type="button" class="toolbar-btn btn-italic text-format-btn" title="' . t_h('editor.toolbar.italic') . '" data-action="exec-italic"><i class="lucide lucide-italic"></i></button>';
+                        echo '<button type="button" class="toolbar-btn btn-underline text-format-btn" title="' . t_h('editor.toolbar.underline') . '" data-action="exec-underline"><i class="lucide lucide-underline"></i></button>';
+                        echo '<button type="button" class="toolbar-btn btn-strikethrough text-format-btn" title="' . t_h('editor.toolbar.strikethrough') . '" data-action="exec-strikethrough"><i class="lucide lucide-strikethrough"></i></button>';
+                        echo '<button type="button" class="toolbar-btn btn-link text-format-btn" title="' . t_h('editor.toolbar.link') . '" data-action="add-link"><i class="lucide lucide-link"></i></button>';
+                        echo '<button type="button" class="toolbar-btn btn-color text-format-btn" title="' . t_h('editor.toolbar.text_color') . '" data-action="toggle-red-color"><i class="lucide lucide-palette"></i></button>';
+                        echo '<button type="button" class="toolbar-btn btn-highlight text-format-btn" title="' . t_h('editor.toolbar.highlight') . '" data-action="toggle-yellow-highlight"><i class="lucide lucide-paintbrush"></i></button>';
+                        if ($note_type !== 'markdown') {
+                            echo '<button type="button" class="toolbar-btn btn-list-ul text-format-btn" title="' . t_h('editor.toolbar.bullet_list') . '" data-action="exec-unordered-list"><i class="lucide lucide-list-ul"></i></button>';
+                            echo '<button type="button" class="toolbar-btn btn-list-ol text-format-btn" title="' . t_h('editor.toolbar.numbered_list') . '" data-action="exec-ordered-list"><i class="lucide lucide-list-ol"></i></button>';
+                        }
+                        echo '<button type="button" class="toolbar-btn btn-text-height text-format-btn" title="' . t_h('slash_menu.title', [], 'Title') . '" data-action="change-font-size"><i class="lucide lucide-type-height"></i></button>';
+                        echo '<button type="button" class="toolbar-btn btn-code text-format-btn" title="' . t_h('editor.toolbar.code_block') . '" data-action="toggle-code-block"><i class="lucide lucide-code"></i></button>';
+                        echo '<button type="button" class="toolbar-btn btn-inline-code text-format-btn" title="' . t_h('editor.toolbar.inline_code') . '" data-action="toggle-inline-code"><i class="lucide lucide-terminal"></i></button>';
+                        if ($note_type !== 'markdown') {
+                            echo '<button type="button" class="toolbar-btn btn-eraser text-format-btn" title="' . t_h('editor.toolbar.clear_formatting') . '" data-action="exec-remove-format"><i class="lucide lucide-eraser"></i></button>';
+                        }
+
+                        if ($note_type === 'note' || $note_type === 'markdown') {
+                            echo '<button type="button" class="toolbar-btn btn-search-replace note-action-btn" title="' . t_h('editor.toolbar.search_replace', [], 'Search and replace') . '" data-action="open-search-replace-modal" data-note-id="'.$row['id'].'"><i class="lucide lucide-search"></i></button>';
+                        }
+
+                        if ($note_type === 'tasklist') {
+                            echo '<div class="tasklist-actions-dropdown">';
+                            echo '<button type="button" class="toolbar-btn btn-tasklist-actions note-action-btn" title="' . t_h('tasklist.actions', [], 'Task list actions') . '" data-action="toggle-tasklist-actions" data-note-id="' . $row['id'] . '" aria-haspopup="true" aria-expanded="false"><i class="lucide lucide-check-square"></i></button>';
+                            echo '<div id="tasklist-actions-menu-' . $row['id'] . '" class="dropdown-menu tasklist-actions-menu" hidden>';
+                            echo '<button type="button" class="dropdown-item" data-action="clear-completed-tasks" data-note-id="' . $row['id'] . '"><i class="lucide lucide-trash"></i> ' . t_h('tasklist.clear_completed', [], 'Clear completed tasks') . '</button>';
+                            echo '<button type="button" class="dropdown-item" data-action="uncheck-all-tasks" data-note-id="' . $row['id'] . '"><i class="lucide lucide-square"></i> ' . t_h('tasklist.uncheck_all', [], 'Uncheck all tasks') . '</button>';
+                            echo '</div>';
+                            echo '</div>';
+                        }
+
+                        echo '<button type="button" class="toolbar-btn btn-checklist note-action-btn" title="' . t_h('editor.toolbar.insert_checklist') . '" data-action="insert-checklist"><i class="lucide lucide-list-check"></i></button>';
                     }
-                    echo '<button type="button" class="toolbar-btn btn-text-height text-format-btn" title="' . t_h('slash_menu.title', [], 'Title') . '" data-action="change-font-size"><i class="lucide lucide-type-height"></i></button>';
-                    echo '<button type="button" class="toolbar-btn btn-code text-format-btn" title="' . t_h('editor.toolbar.code_block') . '" data-action="toggle-code-block"><i class="lucide lucide-code"></i></button>';
-                    echo '<button type="button" class="toolbar-btn btn-inline-code text-format-btn" title="' . t_h('editor.toolbar.inline_code') . '" data-action="toggle-inline-code"><i class="lucide lucide-terminal"></i></button>';
-                    if ($note_type !== 'markdown') {
-                        echo '<button type="button" class="toolbar-btn btn-eraser text-format-btn" title="' . t_h('editor.toolbar.clear_formatting') . '" data-action="exec-remove-format"><i class="lucide lucide-eraser"></i></button>';
-                    }
-                    
-                    // Search and replace button (for note and markdown types)
-                    if ($note_type === 'note' || $note_type === 'markdown') {
-                        echo '<button type="button" class="toolbar-btn btn-search-replace note-action-btn" title="' . t_h('editor.toolbar.search_replace', [], 'Search and replace') . '" data-action="open-search-replace-modal" data-note-id="'.$row['id'].'"><i class="lucide lucide-search"></i></button>';
-                    }
-                
-                    // Task list actions (only visible for tasklist notes)
-                    if ($note_type === 'tasklist') {
-                        // Task list actions dropdown
-                        echo '<div class="tasklist-actions-dropdown">';
-                        echo '<button type="button" class="toolbar-btn btn-tasklist-actions note-action-btn" title="' . t_h('tasklist.actions', [], 'Task list actions') . '" data-action="toggle-tasklist-actions" data-note-id="' . $row['id'] . '" aria-haspopup="true" aria-expanded="false"><i class="lucide lucide-check-square"></i></button>';
-                        echo '<div id="tasklist-actions-menu-' . $row['id'] . '" class="dropdown-menu tasklist-actions-menu" hidden>';
-                        echo '<button type="button" class="dropdown-item" data-action="clear-completed-tasks" data-note-id="' . $row['id'] . '"><i class="lucide lucide-trash"></i> ' . t_h('tasklist.clear_completed', [], 'Clear completed tasks') . '</button>';
-                        echo '<button type="button" class="dropdown-item" data-action="uncheck-all-tasks" data-note-id="' . $row['id'] . '"><i class="lucide lucide-square"></i> ' . t_h('tasklist.uncheck_all', [], 'Uncheck all tasks') . '</button>';
-                        echo '</div>';
-                        echo '</div>';
-                    }
-                
-                    // Insert action buttons
-                    echo '<button type="button" class="toolbar-btn btn-checklist note-action-btn" title="' . t_h('editor.toolbar.insert_checklist') . '" data-action="insert-checklist"><i class="lucide lucide-list-check"></i></button>';
 
                 
                     // Favorite / Share / Attachment buttons
@@ -640,11 +646,14 @@ $body_classes = trim($extra_body_classes);
                         ? t_h('index.toolbar.favorite_remove', [], 'Remove from favorites')
                         : t_h('index.toolbar.favorite_add', [], 'Add to favorites');
 
-                    echo '<button type="button" class="toolbar-btn btn-favorite note-action-btn'.$favorite_class.'" title="'.$favorite_title.'" data-action="toggle-favorite" data-note-id="'.$row['id'].'"><i class="lucide lucide-star"></i></button>';
+                    if (!$isPublicWorkspaceReadonly) {
+                        echo '<button type="button" class="toolbar-btn btn-favorite note-action-btn'.$favorite_class.'" title="'.$favorite_title.'" data-action="toggle-favorite" data-note-id="'.$row['id'].'"><i class="lucide lucide-star"></i></button>';
+                    }
                     $share_class = $is_shared ? ' is-shared' : '';
                     
-                    // Share button
-                    echo '<button type="button" class="toolbar-btn btn-share note-action-btn'.$share_class.'" title="'.t_h('index.toolbar.share_note', [], 'Share note').'" data-action="open-share-modal" data-note-id="'.$row['id'].'"><i class="lucide lucide-cloud"></i></button>';
+                    if (!$isPublicWorkspaceReadonly) {
+                        echo '<button type="button" class="toolbar-btn btn-share note-action-btn'.$share_class.'" title="'.t_h('index.toolbar.share_note', [], 'Share note').'" data-action="open-share-modal" data-note-id="'.$row['id'].'"><i class="lucide lucide-cloud"></i></button>';
+                    }
                     
                     $attachment_indicator_class = ($attachments_count > 0) ? ' has-attachments' : '';
                     echo '<button type="button" class="toolbar-btn btn-attachment note-action-btn'.$attachment_indicator_class.'" title="'.t_h('index.toolbar.attachments_with_count', ['count' => $visible_attachments_count], 'Attachments ({{count}})').'" data-action="show-attachment-dialog" data-note-id="'.$row['id'].'"><i class="lucide lucide-paperclip"></i></button>';
@@ -652,7 +661,9 @@ $body_classes = trim($extra_body_classes);
                     // Reminder button
                     $has_reminder = !empty($row['reminder_at']);
                     $reminder_class = $has_reminder ? ' has-reminder' : '';
-                    echo '<button type="button" class="toolbar-btn btn-reminder note-action-btn'.$reminder_class.'" title="'.t_h('reminder.toolbar_button', [], 'Set reminder').'" data-action="open-reminder-modal" data-note-id="'.$row['id'].'" data-reminder-at="'.htmlspecialchars($row['reminder_at'] ?? '', ENT_QUOTES).'"><i class="lucide lucide-bell"></i></button>';
+                    if (!$isPublicWorkspaceReadonly) {
+                        echo '<button type="button" class="toolbar-btn btn-reminder note-action-btn'.$reminder_class.'" title="'.t_h('reminder.toolbar_button', [], 'Set reminder').'" data-action="open-reminder-modal" data-note-id="'.$row['id'].'" data-reminder-at="'.htmlspecialchars($row['reminder_at'] ?? '', ENT_QUOTES).'"><i class="lucide lucide-bell"></i></button>';
+                    }
                     
                     // Open in new tab button
                     echo '<button type="button" class="toolbar-btn btn-open-new-tab note-action-btn" title="'.t_h('editor.toolbar.open_in_new_tab', [], 'Open in new tab').'" data-action="open-note-new-tab" data-note-id="'.$row['id'].'"><i class="lucide lucide-external-link"></i></button>';
@@ -719,26 +730,29 @@ $body_classes = trim($extra_body_classes);
                     $tags_json_escaped = htmlspecialchars($tags_json, ENT_QUOTES);
                     $attachments_count_json_escaped = htmlspecialchars($attachments_count_json, ENT_QUOTES);
                     
-                    // Individual action buttons
-                    echo '<button type="button" class="toolbar-btn btn-duplicate note-action-btn" data-action="duplicate-note" data-note-id="'.$row['id'].'" title="'.t_h('common.duplicate', [], 'Duplicate').'"><i class="lucide lucide-copy"></i></button>';
-                    echo '<button type="button" class="toolbar-btn btn-move note-action-btn" data-action="show-move-folder-dialog" data-note-id="'.$row['id'].'" title="'.t_h('common.move', [], 'Move').'"><i class="lucide lucide-folder-output"></i></button>';
-                    
-                    // Create linked note button (hidden for linked notes and notes that already have a link)
-                    if ($note_type !== 'linked' && !$hasLinkedNote) {
-                        echo '<button type="button" class="toolbar-btn btn-create-linked-note note-action-btn" title="' . t_h('editor.toolbar.create_linked_note') . '" data-action="create-linked-note"><i class="lucide lucide-link"></i></button>';
+                    if (!$isPublicWorkspaceReadonly) {
+                        echo '<button type="button" class="toolbar-btn btn-duplicate note-action-btn" data-action="duplicate-note" data-note-id="'.$row['id'].'" title="'.t_h('common.duplicate', [], 'Duplicate').'"><i class="lucide lucide-copy"></i></button>';
+                        echo '<button type="button" class="toolbar-btn btn-move note-action-btn" data-action="show-move-folder-dialog" data-note-id="'.$row['id'].'" title="'.t_h('common.move', [], 'Move').'"><i class="lucide lucide-folder-output"></i></button>';
+
+                        if ($note_type !== 'linked' && !$hasLinkedNote) {
+                            echo '<button type="button" class="toolbar-btn btn-create-linked-note note-action-btn" title="' . t_h('editor.toolbar.create_linked_note') . '" data-action="create-linked-note"><i class="lucide lucide-link"></i></button>';
+                        }
                     }
                     
                     // Download button
                     echo '<button type="button" class="toolbar-btn btn-download note-action-btn" title="'.t_h('common.download', [], 'Download').'" data-action="show-export-modal" data-note-id="'.$row['id'].'" data-filename="'.htmlspecialchars($filename, ENT_QUOTES).'" data-title="'.htmlspecialchars($title_safe, ENT_QUOTES).'" data-note-type="'.$note_type.'"><i class="lucide lucide-download"></i></button>';
 
-                    // Convert button (only for markdown and note types)
-                    if ($note_type === 'markdown') {
-                        echo '<button type="button" class="toolbar-btn btn-convert note-action-btn" data-action="show-convert-modal" data-note-id="'.$row['id'].'" data-convert-to="html" title="'.t_h('index.toolbar.convert_to_html', [], 'Convert to HTML').'"><i class="lucide lucide-refresh-cw-alt"></i></button>';
-                    } elseif ($note_type === 'note') {
-                        echo '<button type="button" class="toolbar-btn btn-convert note-action-btn" data-action="show-convert-modal" data-note-id="'.$row['id'].'" data-convert-to="markdown" title="'.t_h('index.toolbar.convert_to_markdown', [], 'Convert to Markdown').'"><i class="lucide lucide-refresh-cw-alt"></i></button>';
+                    if (!$isPublicWorkspaceReadonly) {
+                        if ($note_type === 'markdown') {
+                            echo '<button type="button" class="toolbar-btn btn-convert note-action-btn" data-action="show-convert-modal" data-note-id="'.$row['id'].'" data-convert-to="html" title="'.t_h('index.toolbar.convert_to_html', [], 'Convert to HTML').'"><i class="lucide lucide-refresh-cw-alt"></i></button>';
+                        } elseif ($note_type === 'note') {
+                            echo '<button type="button" class="toolbar-btn btn-convert note-action-btn" data-action="show-convert-modal" data-note-id="'.$row['id'].'" data-convert-to="markdown" title="'.t_h('index.toolbar.convert_to_markdown', [], 'Convert to Markdown').'"><i class="lucide lucide-refresh-cw-alt"></i></button>';
+                        }
                     }
-                    
-                    echo '<button type="button" class="toolbar-btn btn-trash note-action-btn" data-action="delete-note" data-note-id="'.$row['id'].'" title="'.t_h('common.delete', [], 'Delete').'"><i class="lucide lucide-trash-2"></i></button>';
+
+                    if (!$isPublicWorkspaceReadonly) {
+                        echo '<button type="button" class="toolbar-btn btn-trash note-action-btn" data-action="delete-note" data-note-id="'.$row['id'].'" title="'.t_h('common.delete', [], 'Delete').'"><i class="lucide lucide-trash-2"></i></button>';
+                    }
                     
                     // Forward navigation button (desktop only)
                     echo '<button type="button" id="note-history-forward" class="toolbar-btn btn-history-nav btn-history-forward history-disabled" title="' . t_h('editor.toolbar.go_forward', [], 'Go forward') . '" disabled><i class="lucide lucide-chevron-right"></i></button>';
@@ -911,7 +925,8 @@ $body_classes = trim($extra_body_classes);
                     } else {
                         $titlePlaceholder = t_h('index.note.title_placeholder', [], 'Title ?');
                     }
-                    echo '<h4><input class="css-title" autocomplete="off" autocapitalize="off" spellcheck="false" id="inp'.$row['id'].'" type="text" placeholder="'.$titlePlaceholder.'" value="'.$titleValue.'"/></h4>';
+                    $titleReadonlyAttr = $isPublicWorkspaceReadonly ? ' readonly' : '';
+                    echo '<h4><input class="css-title" autocomplete="off" autocapitalize="off" spellcheck="false" id="inp'.$row['id'].'" type="text" placeholder="'.$titlePlaceholder.'" value="'.$titleValue.'"'.$titleReadonlyAttr.'/></h4>';
                     // Subline: creation date and location (visible when enabled in settings)
                     $created_display = '';
                     if (!empty($final_created)) {
@@ -961,8 +976,8 @@ $body_classes = trim($extra_body_classes);
                         $display_content = unescapeMediaInHtml($display_content);
                     }
                     
-                    // All notes are now editable, including Excalidraw notes
-                    $editable = 'true';
+                    // Public workspace access keeps the standard UI but disables content editing.
+                    $editable = $isPublicWorkspaceReadonly ? 'false' : 'true';
                     $excalidraw_attr = '';
 
                     $placeholder_desktop = t('index.editor.placeholder_desktop', [], 'Enter text, use / to open commands menu, paste images or drag-and-drop an image at the cursor.');

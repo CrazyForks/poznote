@@ -651,7 +651,7 @@ class AttachmentsController {
 
         return false;
     }
-    
+
     /**
      * DELETE /api/v1/notes/{noteId}/attachments/{attachmentId}
      * Delete an attachment

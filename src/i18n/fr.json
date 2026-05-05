@@ -502,6 +502,17 @@
     "confirm_delete": {
       "title": "Confirmer la suppression de l’espace de travail",
       "message": "Supprimer l'espace de travail \"{{workspace}}\" ? Les notes seront déplacées vers le workspace de démarrage."
+    },
+    "share": {
+      "actions": {
+        "enable": "Partager",
+        "disable": "Ne plus partager"
+      },
+      "confirm": {
+        "title": "Partager l’espace de travail",
+        "message": "Toute personne disposant de l’URL de l’espace de travail \"{{workspace}}\" aura accès à toutes les notes et tous les dossiers de cet espace de travail.\n\nElle ne pourra rien modifier. Elle pourra uniquement consulter le contenu.",
+        "confirm_button": "Partager l’espace de travail"
+      }
     }
   },
   "display": {

@@ -224,6 +224,14 @@ try {
         FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE
     )');
 
+    // Table for public shared workspaces (read-only)
+    $con->exec('CREATE TABLE IF NOT EXISTS shared_workspaces (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_name TEXT UNIQUE NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        created DATETIME DEFAULT CURRENT_TIMESTAMP
+    )');
+
     // Notifications table for in-app reminders
     $con->exec('CREATE TABLE IF NOT EXISTS notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -238,7 +246,7 @@ try {
     )');
 
     // --- Schema versioning: skip migrations & indexes if already up to date ---
-    $CURRENT_SCHEMA_VERSION = 7;
+    $CURRENT_SCHEMA_VERSION = 8;
     $currentVersion = 0;
     try {
         $svStmt = $con->query("SELECT value FROM settings WHERE key = 'schema_version'");
@@ -382,6 +390,8 @@ try {
         $con->exec('CREATE INDEX IF NOT EXISTS idx_shared_notes_token ON shared_notes(token)');
         $con->exec('CREATE INDEX IF NOT EXISTS idx_shared_folders_folder_id ON shared_folders(folder_id)');
         $con->exec('CREATE INDEX IF NOT EXISTS idx_shared_folders_token ON shared_folders(token)');
+        $con->exec('CREATE INDEX IF NOT EXISTS idx_shared_workspaces_workspace_name ON shared_workspaces(workspace_name)');
+        $con->exec('CREATE INDEX IF NOT EXISTS idx_shared_workspaces_token ON shared_workspaces(token)');
 
         // === DEFAULT SETTINGS ===
         $con->exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('note_font_size', '15')");
@@ -392,7 +402,7 @@ try {
         $con->exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('markdown_split_card_view', '0')");
 
         // === Update schema version ===
-        $con->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '7')");
+        $con->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '8')");
     }
     // --- End schema versioning ---
 

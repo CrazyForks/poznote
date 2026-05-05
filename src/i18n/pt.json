@@ -490,6 +490,17 @@
     "confirm_delete": {
       "title": "Confirmar exclusão do espaço de trabalho",
       "message": "Excluir espaço de trabalho \"{{workspace}}\"? As notas serão movidas para o espaço de trabalho inicial."
+    },
+    "share": {
+      "actions": {
+        "enable": "Compartilhar",
+        "disable": "Deixar de compartilhar"
+      },
+      "confirm": {
+        "title": "Compartilhar espaço de trabalho",
+        "message": "Qualquer pessoa com a URL do espaço de trabalho \"{{workspace}}\" terá acesso a todas as notas e pastas deste espaço de trabalho.\n\nEla não poderá modificar nada. Só poderá consultar o conteúdo.",
+        "confirm_button": "Compartilhar espaço de trabalho"
+      }
     }
   },
   "display": {

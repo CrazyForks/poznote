@@ -11,6 +11,10 @@ function parseTaskData(element) {
     }
 }
 
+function isPublicWorkspaceReadOnly() {
+    return !!(document.body && document.body.classList.contains('public-workspace-readonly'));
+}
+
 // Save tasks to data attribute and re-render the task list
 function saveAndRenderTasks(noteId, tasks) {
     const noteEntry = document.getElementById('entry' + noteId);
@@ -372,6 +376,8 @@ function toggleTask(taskId, noteId) {
 
 // Edit task text
 function editTask(taskId, noteId) {
+    if (isPublicWorkspaceReadOnly()) return;
+
     const taskItem = document.querySelector(`[data-task-id="${taskId}"]`);
     if (!taskItem) return;
 
@@ -439,6 +445,7 @@ function editTask(taskId, noteId) {
 
 // Save task edit
 function saveTaskEdit(taskId, noteId, newText) {
+    if (isPublicWorkspaceReadOnly()) return;
     if (!newText) return;
 
     const noteEntry = document.getElementById('entry' + noteId);

@@ -28,6 +28,24 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQ
 // Handle create/delete actions
 if ($_POST) {
     try {
+        if (!function_exists('buildWorkspaceSharePublicUrl')) {
+            function buildWorkspaceSharePublicUrl(string $workspaceName): string {
+                $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
+                $scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '');
+                if ($scriptDir === '/' || $scriptDir === '\\' || $scriptDir === '.') {
+                    $scriptDir = '';
+                }
+
+                return getProtocol() . '://' . $host . $scriptDir . '/index.php?workspace=' . rawurlencode($workspaceName);
+            }
+        }
+
+        if (!function_exists('buildWorkspaceShareRegistryKey')) {
+            function buildWorkspaceShareRegistryKey(string $workspaceName): string {
+                return buildPublicWorkspaceRegistryKey($workspaceName);
+            }
+        }
+
         if (isset($_POST['action']) && $_POST['action'] === 'create') {
             $name = trim($_POST['name'] ?? '');
             if ($name === '') throw new Exception(t('workspaces.errors.name_empty', [], 'Workspace name cannot be empty', $currentLang));
@@ -184,6 +202,24 @@ if ($_POST) {
                 // non-fatal
             }
 
+            // Remove shared read-only workspace link if present
+            try {
+                require_once __DIR__ . '/users/db_master.php';
+
+                $shareStmt = $con->prepare('SELECT token FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
+                $shareStmt->execute([$name]);
+                $workspaceShareToken = $shareStmt->fetchColumn();
+
+                if ($workspaceShareToken) {
+                    unregisterSharedLink((string)$workspaceShareToken);
+                }
+
+                $deleteShareStmt = $con->prepare('DELETE FROM shared_workspaces WHERE workspace_name = ?');
+                $deleteShareStmt->execute([$name]);
+            } catch (Exception $e) {
+                // Non-fatal: don't block workspace deletion if share cleanup fails
+            }
+
             // Delete workspace backgrounds folder
             try {
                 $currentUser = getCurrentUser();
@@ -255,6 +291,29 @@ if ($_POST) {
                     // Update the workspace name directly
                     $upd = $con->prepare('UPDATE workspaces SET name = ? WHERE name = ?');
                     $upd->execute([$new_name, $name]);
+
+                    $shareStmt = $con->prepare('SELECT id, token FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
+                    $shareStmt->execute([$name]);
+                    $existingShare = $shareStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+                    if ($existingShare) {
+                        $shareId = (int)$existingShare['id'];
+                        $oldRegistryKey = (string)($existingShare['token'] ?? '');
+                        $newRegistryKey = buildWorkspaceShareRegistryKey($new_name);
+
+                        require_once __DIR__ . '/users/db_master.php';
+                        if (!isTokenAvailable($newRegistryKey, (int)$_SESSION['user_id'], 'workspace', $shareId)) {
+                            throw new Exception(t('workspaces.share.errors.url_in_use', [], 'A public workspace with this name already exists on this Poznote instance', $currentLang));
+                        }
+
+                        $upd = $con->prepare('UPDATE shared_workspaces SET workspace_name = ?, token = ? WHERE workspace_name = ?');
+                        $upd->execute([$new_name, $newRegistryKey, $name]);
+
+                        if ($oldRegistryKey !== '' && $oldRegistryKey !== $newRegistryKey) {
+                            unregisterSharedLink($oldRegistryKey);
+                        }
+                        registerSharedLink($newRegistryKey, (int)$_SESSION['user_id'], 'workspace', $shareId);
+                    }
 
                     // Move entries to new workspace name
                     $upd = $con->prepare('UPDATE entries SET workspace = ? WHERE workspace = ?');
@@ -411,6 +470,94 @@ if ($_POST) {
                 echo json_encode(['success' => true, 'moved' => $moved ?? 0, 'target' => $target]);
                 exit;
             }
+        } elseif (isset($_POST['action']) && $_POST['action'] === 'upsert_readonly_share') {
+            $name = trim($_POST['name'] ?? '');
+
+            if ($name === '') {
+                throw new Exception(t('workspaces.errors.name_required', [], 'Workspace name required', $currentLang));
+            }
+
+            $workspaceCheck = $con->prepare('SELECT name FROM workspaces WHERE name = ? LIMIT 1');
+            $workspaceCheck->execute([$name]);
+            if (!$workspaceCheck->fetch(PDO::FETCH_ASSOC)) {
+                throw new Exception(t('workspaces.errors.not_found', [], 'Workspace not found', $currentLang));
+            }
+
+            require_once __DIR__ . '/users/db_master.php';
+
+            $shareStmt = $con->prepare('SELECT id, token FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
+            $shareStmt->execute([$name]);
+            $existingShare = $shareStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
+            $shareId = $existingShare ? (int)$existingShare['id'] : 0;
+            $oldToken = $existingShare['token'] ?? null;
+            $token = buildWorkspaceShareRegistryKey($name);
+
+            if (!isTokenAvailable($token, (int)$_SESSION['user_id'], 'workspace', $shareId)) {
+                throw new Exception(t('workspaces.share.errors.url_in_use', [], 'A public workspace with this name already exists on this Poznote instance', $currentLang));
+            }
+
+            if ($existingShare) {
+                $updateShare = $con->prepare('UPDATE shared_workspaces SET token = ?, created = CURRENT_TIMESTAMP WHERE workspace_name = ?');
+                $updateShare->execute([$token, $name]);
+            } else {
+                $insertShare = $con->prepare('INSERT INTO shared_workspaces (workspace_name, token) VALUES (?, ?)');
+                $insertShare->execute([$name, $token]);
+
+                $shareLookup = $con->prepare('SELECT id FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
+                $shareLookup->execute([$name]);
+                $shareId = (int)$shareLookup->fetchColumn();
+            }
+
+            if ($oldToken && $oldToken !== $token) {
+                unregisterSharedLink((string)$oldToken);
+            }
+            if ($shareId > 0) {
+                registerSharedLink($token, (int)$_SESSION['user_id'], 'workspace', $shareId);
+            }
+
+            $publicUrl = buildWorkspaceSharePublicUrl($name);
+            $message = t('workspaces.share.messages.enabled', [], 'Read-only workspace link enabled', $currentLang);
+
+            if (!empty($isAjax)) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'public' => true,
+                    'url' => $publicUrl,
+                    'message' => $message,
+                ]);
+                exit;
+            }
+        } elseif (isset($_POST['action']) && $_POST['action'] === 'disable_readonly_share') {
+            $name = trim($_POST['name'] ?? '');
+            if ($name === '') {
+                throw new Exception(t('workspaces.errors.name_required', [], 'Workspace name required', $currentLang));
+            }
+
+            require_once __DIR__ . '/users/db_master.php';
+
+            $shareStmt = $con->prepare('SELECT token FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
+            $shareStmt->execute([$name]);
+            $token = $shareStmt->fetchColumn();
+            if ($token) {
+                unregisterSharedLink((string)$token);
+            }
+
+            $deleteShare = $con->prepare('DELETE FROM shared_workspaces WHERE workspace_name = ?');
+            $deleteShare->execute([$name]);
+
+            $message = t('workspaces.share.messages.disabled', [], 'Read-only workspace link disabled', $currentLang);
+
+            if (!empty($isAjax)) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'public' => false,
+                    'message' => $message,
+                ]);
+                exit;
+            }
         }
     } catch (Exception $e) {
         $error = $e->getMessage();
@@ -422,11 +569,37 @@ if ($_POST) {
     }
 }
 
-// Read existing workspaces
+if (!function_exists('buildWorkspaceSharePublicUrl')) {
+    function buildWorkspaceSharePublicUrl(string $workspaceName): string {
+        $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
+        $scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '');
+        if ($scriptDir === '/' || $scriptDir === '\\' || $scriptDir === '.') {
+            $scriptDir = '';
+        }
+
+        return getProtocol() . '://' . $host . $scriptDir . '/index.php?workspace=' . rawurlencode($workspaceName);
+    }
+}
+
+if (!function_exists('buildWorkspaceShareRegistryKey')) {
+    function buildWorkspaceShareRegistryKey(string $workspaceName): string {
+        return buildPublicWorkspaceRegistryKey($workspaceName);
+    }
+}
+
+// Read existing workspaces and share state
 $workspaces = [];
-$stmt = $con->query("SELECT name FROM workspaces ORDER BY name");
+$workspaceRows = [];
+$stmt = $con->query('SELECT w.name, sw.token AS readonly_token FROM workspaces w LEFT JOIN shared_workspaces sw ON sw.workspace_name = w.name ORDER BY w.name');
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    $workspaces[] = $row['name'];
+    $workspaceName = $row['name'];
+    $readonlyToken = $row['readonly_token'] ?? '';
+    $workspaceRows[] = [
+        'name' => $workspaceName,
+        'readonly_token' => $readonlyToken,
+        'readonly_url' => $readonlyToken !== '' ? buildWorkspaceSharePublicUrl($workspaceName) : '',
+    ];
+    $workspaces[] = $workspaceName;
 }
 
 // Count notes per workspace, excluding trashed notes.
@@ -482,6 +655,14 @@ try {
 <body data-workspaces="<?php echo htmlspecialchars(json_encode($workspaces, JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP), ENT_QUOTES, 'UTF-8'); ?>"
       data-workspace="<?php echo htmlspecialchars($pageWorkspace, ENT_QUOTES, 'UTF-8'); ?>"
       data-txt-last-opened="<?php echo htmlspecialchars(t('workspaces.default.last_opened', [], 'Last workspace opened', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-enabled="<?php echo htmlspecialchars(t('workspaces.share.status.enabled', [], 'Public read-only enabled', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-disabled="<?php echo htmlspecialchars(t('workspaces.share.status.disabled', [], 'Not shared publicly', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-enable-btn="<?php echo htmlspecialchars(t('workspaces.share.actions.enable', [], 'Share', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-open-btn="<?php echo htmlspecialchars(t('public.actions.open', [], 'Open public view', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-copy-btn="<?php echo htmlspecialchars(t('public.actions.copy_url', [], 'Copy URL', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-disable-btn="<?php echo htmlspecialchars(t('workspaces.share.actions.disable', [], 'Unshare', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-copy-success="<?php echo htmlspecialchars(t('public.actions.url_copied', [], 'URL copied!', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+    data-txt-workspace-share-help="<?php echo htmlspecialchars(t('workspaces.share.help', [], 'Anyone with this URL opens Poznote directly on this workspace in read-only mode.', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
       <?php if (!empty($clearSelectedWorkspace) && !$isAjax): ?>
       data-clear-workspace="<?php echo htmlspecialchars(json_encode($workspaces[0] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
       <?php endif; ?>>
@@ -524,8 +705,11 @@ try {
                     <div><?php echo t_h('workspaces.sections.existing.empty', [], 'No workspaces defined.', $currentLang); ?></div>
                 <?php else: ?>
                     <ul>
-                        <?php foreach ($workspaces as $ws): ?>
+                        <?php foreach ($workspaceRows as $workspaceRow): ?>
                                 <?php
+                                $ws = $workspaceRow['name'];
+                                $readonlyToken = $workspaceRow['readonly_token'] ?? '';
+                                $workspaceReadonlyEnabled = $readonlyToken !== '';
                                 $ws_display = htmlspecialchars($ws);
                             ?>
                             <li>
@@ -554,6 +738,17 @@ try {
                                     <button class="btn btn-secondary action-btn btn-background" data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>">
                                         <?php echo t_h('workspaces.actions.background', [], 'Background', $currentLang); ?>
                                     </button>
+                                </div>
+                                <div class="ws-col ws-col-share">
+                                    <form method="POST" class="workspace-share-toggle-form">
+                                        <input type="hidden" name="action" value="<?php echo $workspaceReadonlyEnabled ? 'disable_readonly_share' : 'upsert_readonly_share'; ?>">
+                                        <input type="hidden" name="name" value="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>">
+                                        <button type="submit" class="btn action-btn <?php echo $workspaceReadonlyEnabled ? 'btn-danger' : 'btn-success'; ?>">
+                                            <?php echo $workspaceReadonlyEnabled
+                                                ? t_h('workspaces.share.actions.disable', [], 'Unshare', $currentLang)
+                                                : t_h('workspaces.share.actions.enable', [], 'Share', $currentLang); ?>
+                                        </button>
+                                    </form>
                                 </div>
                                 <div class="ws-col ws-col-select">
                                     <?php if ($ws !== ''): ?>

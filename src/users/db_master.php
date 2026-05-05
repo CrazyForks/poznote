@@ -105,7 +105,7 @@ function initializeMasterDatabase(PDO $con): void {
         CREATE TABLE IF NOT EXISTS shared_links (
             token TEXT PRIMARY KEY,
             user_id INTEGER NOT NULL,
-            target_type TEXT NOT NULL, -- 'note' or 'folder'
+            target_type TEXT NOT NULL, -- 'note', 'folder', or 'workspace'
             target_id INTEGER NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )

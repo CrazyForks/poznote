@@ -443,7 +443,18 @@
       "delete_title": "Confirm delete workspace",
       "delete_description": "All notes and folders will be permanently deleted and cannot be recovered.",
       "delete_placeholder": "Type workspace name to confirm",
-      "delete_button": "Delete workspace"
+      "delete_button": "Delete workspace",
+      "share": {
+        "actions": {
+          "enable": "Share",
+          "disable": "Unshare"
+        },
+        "confirm": {
+          "title": "Share workspace",
+          "message": "Anyone with the URL for workspace \"{{workspace}}\" will have access to all notes and folders in this workspace.\n\nThey will not be able to modify anything. They will only be able to view the content.",
+          "confirm_button": "Share workspace"
+        }
+      }
     },
     "user_settings_info": {
       "title": "Account Settings",

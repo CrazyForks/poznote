@@ -491,6 +491,17 @@
     "confirm_delete": {
       "title": "Arbeitsbereich löschen bestätigen",
       "message": "Arbeitsbereich \"{{workspace}}\" löschen? Notizen werden in den Startup-Arbeitsbereich verschoben."
+    },
+    "share": {
+      "actions": {
+        "enable": "Teilen",
+        "disable": "Freigabe aufheben"
+      },
+      "confirm": {
+        "title": "Arbeitsbereich teilen",
+        "message": "Jede Person mit der URL des Arbeitsbereichs \"{{workspace}}\" hat Zugriff auf alle Notizen und Ordner in diesem Arbeitsbereich.\n\nEs sind keine Änderungen möglich. Der Inhalt kann nur angesehen werden.",
+        "confirm_button": "Arbeitsbereich teilen"
+      }
     }
   },
   "display": {

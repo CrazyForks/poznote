@@ -101,6 +101,16 @@ body {
     min-width: 50px;
 }
 
+.ws-col-share {
+    flex: 0 0 auto;
+    justify-content: center;
+    min-width: 90px;
+}
+
+.workspace-share-toggle-form {
+    margin: 0;
+}
+
 /* Bloc de nom du workspace */
 .ws-name-block {
     display: flex;
@@ -126,6 +136,72 @@ body {
     padding: 2px 8px;
     border-radius: 12px;
     margin-left: 8px;
+}
+
+.workspace-share-panel {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid #d8e3ea;
+    border-radius: 8px;
+    background: #f7fafc;
+    width: 100%;
+}
+
+.workspace-share-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.workspace-share-title {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.workspace-share-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.workspace-share-badge.is-enabled {
+    background: #dff7e7;
+    color: #166534;
+}
+
+.workspace-share-badge.is-disabled {
+    background: #eceff1;
+    color: #475569;
+}
+
+.workspace-share-help {
+    margin: 8px 0 0;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.workspace-share-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.workspace-share-link {
+    display: inline-block;
+    margin-top: 10px;
+    color: #0f5f93;
+    font-size: 13px;
+    word-break: break-all;
+}
+
+.workspace-share-link:hover {
+    color: #084b75;
 }
 
 /* Boutons d'action */
@@ -426,6 +502,14 @@ body {
         margin-bottom: 8px !important;
         padding: 12px !important;
         font-size: 14px !important;
+    }
+
+    .workspace-share-panel {
+        padding: 12px !important;
+    }
+
+    .workspace-share-controls {
+        flex-direction: column !important;
     }
     
     /* Ensure delete form takes full width */
