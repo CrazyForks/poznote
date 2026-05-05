@@ -65,16 +65,25 @@
     });
 
     function initWorkspaceBackgroundButtons() {
-        // Add click handlers to all background buttons
-        document.querySelectorAll('.btn-background').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                const workspace = this.getAttribute('data-ws');
-                openBackgroundModalForWorkspace(workspace);
-            });
-        });
+        document.addEventListener('click', handleWorkspaceBackgroundActionClick);
 
         // Initialize modal controls
         initBackgroundModalControls();
+    }
+
+    function handleWorkspaceBackgroundActionClick(event) {
+        var button = event.target && event.target.closest
+            ? event.target.closest('.workspace-background-action, .btn-background')
+            : null;
+        if (!button || button.disabled) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        var workspace = button.getAttribute('data-ws');
+        if (!workspace) return;
+
+        openBackgroundModalForWorkspace(workspace);
     }
 
     function initBackgroundModalControls() {

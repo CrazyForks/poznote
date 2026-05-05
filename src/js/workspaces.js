@@ -536,6 +536,107 @@ function getWorkspaceShareConfirmButtonText() {
     return wsTr('workspaces.share.confirm.confirm_button', {}, 'Share workspace');
 }
 
+function updateWorkspaceShareToggleButton(button, isShared) {
+    if (!button) return;
+
+    button.setAttribute('data-action', isShared ? 'disable_readonly_share' : 'upsert_readonly_share');
+    button.textContent = isShared
+        ? getWorkspaceShareText('workspace-share-disable-btn', 'Unshare')
+        : getWorkspaceShareText('workspace-share-enable-btn', 'Share');
+    button.classList.toggle('btn-danger', isShared);
+    button.classList.toggle('btn-success', !isShared);
+}
+
+function showWorkspaceShareError(message) {
+    if (window.modalAlert && typeof window.modalAlert.alert === 'function') {
+        window.modalAlert.alert(
+            message,
+            'error',
+            wsTr('common.error', {}, 'Error')
+        );
+        return;
+    }
+
+    window.alert(message);
+}
+
+function submitWorkspaceShareToggle(button) {
+    var wsName = button.getAttribute('data-ws');
+    var action = button.getAttribute('data-action');
+    if (!wsName || !action || button.disabled) return;
+
+    button.disabled = true;
+
+    var params = new URLSearchParams({
+        action: action,
+        name: wsName
+    });
+
+    fetch('workspaces.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        },
+        body: params.toString()
+    })
+    .then(function (resp) { return resp.json(); })
+    .then(function (json) {
+        button.disabled = false;
+        if (json && json.success) {
+            var isShared = action === 'upsert_readonly_share';
+            updateWorkspaceShareToggleButton(button, isShared);
+        } else {
+            showWorkspaceShareError(
+                wsTr(
+                    'workspaces.alerts.error_prefix',
+                    { error: (json && json.error) || wsTr('workspaces.alerts.unknown_error', {}, 'Unknown error') },
+                    'Error: {{error}}'
+                )
+            );
+        }
+    })
+    .catch(function (err) {
+        button.disabled = false;
+        console.error('Error toggling workspace share:', err);
+        showWorkspaceShareError(wsTr('workspaces.alerts.share_error', {}, 'Error updating sharing status'));
+    });
+}
+
+function handleWorkspaceShareToggleClick(e) {
+    if (e.target && e.target.closest && e.target.closest('.btn-share-toggle')) {
+        var btn = e.target.closest('.btn-share-toggle');
+        var action = btn.getAttribute('data-action');
+        if (!action || btn.disabled) return;
+
+        if (action !== 'upsert_readonly_share') {
+            submitWorkspaceShareToggle(btn);
+            return;
+        }
+
+        var workspaceName = btn.getAttribute('data-ws') || '';
+        var title = getWorkspaceShareConfirmTitle();
+        var message = getWorkspaceShareConfirmMessage(workspaceName);
+        var confirmText = getWorkspaceShareConfirmButtonText();
+
+        if (window.modalAlert && typeof window.modalAlert.confirm === 'function') {
+            window.modalAlert.confirm(message, title, {
+                alertType: 'info',
+                confirmText: confirmText
+            }).then(function (confirmed) {
+                if (!confirmed) return;
+                submitWorkspaceShareToggle(btn);
+            });
+            return;
+        }
+
+        if (window.confirm(message)) {
+            submitWorkspaceShareToggle(btn);
+        }
+    }
+}
+
 function handleWorkspaceShareToggleSubmit(event) {
     var form = event.target;
     if (!form || !form.classList || !form.classList.contains('workspace-share-toggle-form')) {
@@ -777,9 +878,13 @@ function handleWorkspaceReadonlyShareCopy(e) {
 // ========== WORKSPACE ACTION HANDLERS ==========
 // Event handlers for rename, select, delete, and move operations
 function handleRenameButtonClick(e) {
-    if (e.target && e.target.classList && e.target.classList.contains('btn-rename')) {
-        var currentName = e.target.getAttribute('data-ws');
-        if (!currentName || e.target.disabled) return;
+    var button = e.target && e.target.closest ? e.target.closest('.workspace-rename-action, .btn-rename') : null;
+    if (button) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var currentName = button.getAttribute('data-ws');
+        if (!currentName || button.disabled) return;
 
         // Populate modal with current name
         document.getElementById('renameSource').textContent = currentName;
@@ -1285,6 +1390,34 @@ function initializeWorkspacesPage() {
     document.addEventListener('click', handleSelectButtonClick);
     document.addEventListener('click', handleDeleteButtonClick);
     document.addEventListener('click', handleMoveButtonClick);
+    document.addEventListener('click', handleWorkspaceShareToggleClick);
+    
+    // Toggle dropdowns
+    document.addEventListener('click', function (e) {
+        var toggle = e.target.closest('.dropdown-toggle-btn');
+        if (toggle) {
+            var menu = toggle.nextElementSibling;
+            var isShown = menu.classList.contains('show');
+            
+            // Close all other dropdowns
+            document.querySelectorAll('.dropdown-menu.show').forEach(function (m) {
+                m.classList.remove('show');
+            });
+            
+            if (!isShown) {
+                menu.classList.add('show');
+            }
+            return;
+        }
+
+        // Close dropdowns when clicking outside
+        if (!e.target.closest('.ws-action-dropdown')) {
+            document.querySelectorAll('.dropdown-menu.show').forEach(function (m) {
+                m.classList.remove('show');
+            });
+        }
+    });
+
     document.addEventListener('submit', handleWorkspaceShareToggleSubmit, true);
     document.addEventListener('click', function (event) {
         if (handleWorkspaceReadonlyShareSave(event)) return;

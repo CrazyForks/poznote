@@ -1002,6 +1002,12 @@
       "delete_link_only": "仅删除此快捷方式",
       "delete_link_and_target": "删除笔记及其所有快捷方式"
     },
+    "move_linked_note": {
+      "title": "移动快捷方式",
+      "message": "您想移动什么？",
+      "move_link_only": "仅移动此快捷方式",
+      "move_target_note": "移动原始笔记"
+    },
     "convert": {
       "title": "转换笔记",
       "message": "您确定要转换此笔记吗？",

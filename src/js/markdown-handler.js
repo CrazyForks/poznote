@@ -722,25 +722,47 @@ function renumberMarkdownOrderedListLines(lines) {
 }
 
 function isMarkdownTableRowLine(line) {
-    return /^\s*\|.*\|\s*$/.test(line || '');
+    return getMarkdownTableCells(line).length > 0;
 }
 
 function isMarkdownTableSeparatorLine(line) {
-    return /^\s*\|(?:\s*:?-+:?\s*\|)+\s*$/.test(line || '');
+    var trimmed = String(line || '').trim();
+    if (!trimmed || trimmed.indexOf('|') === -1) {
+        return false;
+    }
+
+    var cells = getMarkdownTableCells(trimmed);
+    return cells.length > 0 && cells.every(function (cell) {
+        return /^:?-+:?$/.test(cell.trim());
+    });
 }
 
 function getMarkdownTableCells(line) {
-    if (!isMarkdownTableRowLine(line)) {
-        return null;
+    var trimmed = String(line || '').trim();
+    if (!trimmed || trimmed.indexOf('|') === -1) {
+        return [];
     }
 
-    return String(line)
-        .trim()
+    if (trimmed.charAt(0) === '|') {
+        trimmed = trimmed.slice(1);
+    }
+    if (trimmed.charAt(trimmed.length - 1) === '|') {
+        trimmed = trimmed.slice(0, -1);
+    }
+
+    return trimmed
         .split('|')
-        .slice(1, -1)
         .map(function (cell) {
             return cell.trim();
         });
+}
+
+function isMarkdownTableStart(line, nextLine) {
+    if (!isMarkdownTableRowLine(line) || isMarkdownTableSeparatorLine(line) || !isMarkdownTableSeparatorLine(nextLine)) {
+        return false;
+    }
+
+    return getMarkdownTableCells(line).length === getMarkdownTableCells(nextLine).length;
 }
 
 function buildMarkdownEmptyTableRow(cellCount, indent) {
@@ -1968,7 +1990,7 @@ function parseMarkdown(text) {
                     /^\s*[\*\-\+]\s+\[([ xX])\]\s+/.test(nextLine) || // Task lists
                     /^\s*[\*\-\+]\s+/.test(nextLine) ||          // Unordered lists
                     /^\s*\d+(?:\.\d+)*\.\s+/.test(nextLine) ||    // Ordered lists
-                    /^\s*\|.+\|\s*$/.test(nextLine)               // Tables
+                    isMarkdownTableStart(nextLine, lines[nextNonEmptyIndex + 1] || '') // Tables
                 );
             }
 
@@ -2276,7 +2298,7 @@ function parseMarkdown(text) {
         }
 
         // Tables - require a header separator row so plain pipe-delimited text stays editable as text.
-        if (line.match(/^\s*\|/) && i + 1 < lines.length && isMarkdownTableSeparatorLine(lines[i + 1])) {
+        if (isMarkdownTableStart(line, lines[i + 1] || '')) {
             flushParagraph();
 
             let tableRows = [];
@@ -2284,14 +2306,12 @@ function parseMarkdown(text) {
             let isFirstRow = true;
 
             // Collect all consecutive table rows
-            while (i < lines.length && lines[i].match(/^\s*\|/)) {
+            while (i < lines.length && isMarkdownTableRowLine(lines[i])) {
                 let currentLine = lines[i].trim();
 
                 // Check if this is a header separator line (|---|---|)
                 if (isMarkdownTableSeparatorLine(currentLine)) {
-                    tableAlignments = currentLine
-                        .split('|')
-                        .slice(1, -1)
+                    tableAlignments = getMarkdownTableCells(currentLine)
                         .map(function (cell) {
                             let marker = cell.trim();
                             let alignLeft = marker.startsWith(':');
@@ -2308,7 +2328,7 @@ function parseMarkdown(text) {
                 let logicalRow = currentLine;
                 while (!/\|\s*$/.test(logicalRow) && i + 1 < lines.length) {
                     let nextLine = lines[i + 1].trim();
-                    if (nextLine === '') {
+                    if (nextLine === '' || isMarkdownTableRowLine(nextLine)) {
                         break;
                     }
 
@@ -2317,10 +2337,7 @@ function parseMarkdown(text) {
                 }
 
                 // Parse table cells
-                let cells = logicalRow
-                    .split('|')
-                    .slice(1, -1) // Remove first and last empty elements
-                    .map(cell => cell.trim());
+                let cells = getMarkdownTableCells(logicalRow);
 
                 tableRows.push({
                     cells: cells,

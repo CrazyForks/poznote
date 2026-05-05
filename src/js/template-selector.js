@@ -193,6 +193,10 @@
                 // Success - open the created template
                 const workspace = (typeof getSelectedWorkspace === 'function' ? getSelectedWorkspace() : '') || (typeof selectedWorkspace !== 'undefined' ? selectedWorkspace : '') || '';
                 let url = 'index.php?note=' + encodeURIComponent(data.id) + '&workspace=' + encodeURIComponent(workspace);
+
+                if (typeof window.rememberFolderStatesForCreatedNote === 'function') {
+                    window.rememberFolderStatesForCreatedNote(data.folder_id || null);
+                }
                 
                 // Add expand_folder parameter to force folder expansion on load
                 if (data.folder_id) {

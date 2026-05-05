@@ -991,6 +991,12 @@
       "delete_link_only": "Eliminar solo este atajo",
       "delete_link_and_target": "Eliminar la nota y todos sus atajos"
     },
+    "move_linked_note": {
+      "title": "Mover atajo",
+      "message": "¿Qué desea mover?",
+      "move_link_only": "Mover solo este atajo",
+      "move_target_note": "Mover la nota original"
+    },
     "convert": {
       "title": "Convertir nota",
       "message": "¿Estás seguro de que quieres convertir esta nota?",

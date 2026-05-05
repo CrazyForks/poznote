@@ -554,6 +554,91 @@ function toggleCodeBlock() {
   // Find the note entry container
   const noteEntry = container.closest ? container.closest('.noteentry') : null;
 
+  function focusNoteEntry() {
+    if (!noteEntry) return;
+    try {
+      noteEntry.focus({ preventScroll: true });
+    } catch (e) {
+      noteEntry.focus();
+    }
+  }
+
+  function placeCaretInsideCodeBlock(pre, collapseToEnd) {
+    if (!pre) return;
+
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    const editableCode = pre.querySelector('code') || pre;
+    const newRange = document.createRange();
+    const textNode = collapseToEnd ? getLastTextNode(editableCode) : null;
+
+    if (textNode) {
+      newRange.setStart(textNode, textNode.textContent.length);
+    } else {
+      newRange.setStart(editableCode, 0);
+    }
+
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+  }
+
+  function getLastTextNode(root) {
+    if (!root) return null;
+    if (root.nodeType === 3) return root;
+
+    for (let i = root.childNodes.length - 1; i >= 0; i--) {
+      const textNode = getLastTextNode(root.childNodes[i]);
+      if (textNode) return textNode;
+    }
+
+    return null;
+  }
+
+  function insertCodeBlock(textContent) {
+    const fragment = document.createDocumentFragment();
+    const pre = document.createElement('pre');
+    const code = document.createElement('code');
+
+    pre.className = 'code-block';
+    pre.setAttribute('data-language', 'CODE');
+    code.setAttribute('data-language', 'CODE');
+
+    if (textContent) {
+      code.textContent = textContent;
+    } else {
+      code.appendChild(document.createElement('br'));
+    }
+
+    pre.appendChild(code);
+
+    if (atFirstLine) {
+      fragment.appendChild(document.createElement('br'));
+    }
+
+    fragment.appendChild(pre);
+
+    if (atLastLine) {
+      fragment.appendChild(document.createElement('br'));
+    }
+
+    range.deleteContents();
+    range.insertNode(fragment);
+
+    focusNoteEntry();
+    placeCaretInsideCodeBlock(pre, !!textContent);
+
+    setTimeout(function () {
+      focusNoteEntry();
+      placeCaretInsideCodeBlock(pre, !!textContent);
+
+      if (noteEntry) {
+        noteEntry.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }, 50);
+  }
+
   // Helper function to check if we're at the first line of the note
   function isAtFirstLine() {
     if (!noteEntry) return false;
@@ -590,11 +675,7 @@ function toggleCodeBlock() {
 
   // Otherwise, create a code block with the selected text
   if (sel.isCollapsed) {
-    // No selection: insert empty block
-    // Add blank line before only if at first line, after only if at last line
-    const brBefore = atFirstLine ? '<br>' : '';
-    const brAfter = atLastLine ? '<br>' : '';
-    document.execCommand('insertHTML', false, `${brBefore}<pre class="code-block" data-language="CODE"><br></pre>${brAfter}`);
+    insertCodeBlock('');
     return;
   }
 
@@ -602,18 +683,7 @@ function toggleCodeBlock() {
   const selectedText = getNormalizedRangeText(range);
   if (!selectedText.trim()) return;
 
-  // Escape HTML and create code block
-  const escapedText = selectedText
-    .replace(/\u200B/g, '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  // Add blank line before only if at first line, after only if at last line
-  const brBefore = atFirstLine ? '<br>' : '';
-  const brAfter = atLastLine ? '<br>' : '';
-  const codeHTML = `${brBefore}<pre class="code-block" data-language="CODE">${escapedText}</pre>${brAfter}`;
-  document.execCommand('insertHTML', false, codeHTML);
+  insertCodeBlock(selectedText.replace(/\u200B/g, ''));
 }
 
 function getNormalizedRangeText(range) {

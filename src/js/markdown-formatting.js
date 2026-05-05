@@ -25,6 +25,154 @@
         return false;
     }
 
+    function getMarkdownEditorElement(range) {
+        if (!range) return null;
+
+        if (typeof getMarkdownEditorFromRange === 'function') {
+            var existingEditor = getMarkdownEditorFromRange(range);
+            if (existingEditor) return existingEditor;
+        }
+
+        var container = range.commonAncestorContainer;
+        var element = container.nodeType === 3 ? container.parentElement : container;
+        return element && element.closest ? element.closest('.markdown-editor') : null;
+    }
+
+    function getMarkdownEditorValue(editor) {
+        if (!editor) return '';
+
+        if (typeof getMarkdownEditorText === 'function') {
+            return getMarkdownEditorText(editor);
+        }
+
+        return editor.innerText || editor.textContent || '';
+    }
+
+    function getSelectionOffsetsInMarkdownEditor(editor, range) {
+        if (!editor || !range) return null;
+
+        if (typeof getRangeOffsetsWithinEditor === 'function') {
+            var existingOffsets = getRangeOffsetsWithinEditor(editor, range);
+            if (existingOffsets) return existingOffsets;
+        }
+
+        try {
+            if (!editor.contains(range.startContainer) || !editor.contains(range.endContainer)) {
+                return null;
+            }
+
+            var startRange = range.cloneRange();
+            startRange.selectNodeContents(editor);
+            startRange.setEnd(range.startContainer, range.startOffset);
+            var start = startRange.toString().length;
+
+            var endRange = range.cloneRange();
+            endRange.selectNodeContents(editor);
+            endRange.setEnd(range.endContainer, range.endOffset);
+            var end = endRange.toString().length;
+
+            return {
+                start: Math.min(start, end),
+                end: Math.max(start, end)
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function findTextNodeAtOffset(rootEl, offset) {
+        var walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, null, false);
+        var node = walker.nextNode();
+        var remaining = Math.max(0, offset);
+
+        while (node) {
+            var length = node.nodeValue ? node.nodeValue.length : 0;
+            if (remaining <= length) {
+                return { node: node, offset: remaining };
+            }
+
+            remaining -= length;
+            node = walker.nextNode();
+        }
+
+        return {
+            node: rootEl,
+            offset: rootEl.childNodes ? rootEl.childNodes.length : 0
+        };
+    }
+
+    function setMarkdownEditorSelection(editor, startOffset, endOffset) {
+        if (!editor) return;
+
+        if (typeof setSelectionByEditorOffsets === 'function') {
+            setSelectionByEditorOffsets(editor, startOffset, endOffset);
+            return;
+        }
+
+        var selection = window.getSelection();
+        if (!selection) return;
+
+        var startPos = findTextNodeAtOffset(editor, startOffset);
+        var endPos = findTextNodeAtOffset(editor, endOffset);
+        var range = document.createRange();
+
+        try {
+            range.setStart(startPos.node, startPos.offset);
+            range.setEnd(endPos.node, endPos.offset);
+        } catch (e) {
+            range.selectNodeContents(editor);
+            range.collapse(false);
+        }
+
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    function focusMarkdownEditor(editor) {
+        if (!editor) return;
+
+        try {
+            editor.focus({ preventScroll: true });
+        } catch (e) {
+            editor.focus();
+        }
+    }
+
+    function replaceMarkdownRangeAndSelect(editor, start, end, replacement, selectionStart, selectionEnd) {
+        if (!editor) return false;
+
+        var didReplace = false;
+
+        if (typeof replaceMarkdownRangeByOffsets === 'function') {
+            didReplace = replaceMarkdownRangeByOffsets(editor, start, end, replacement);
+        } else {
+            var fullText = getMarkdownEditorValue(editor);
+            var safeStart = Math.max(0, Math.min(start, fullText.length));
+            var safeEnd = Math.max(safeStart, Math.min(end, fullText.length));
+            editor.textContent = fullText.slice(0, safeStart) + replacement + fullText.slice(safeEnd);
+
+            try {
+                editor.dispatchEvent(new Event('input', { bubbles: true }));
+            } catch (e) {
+                // Ignore input dispatch failures.
+            }
+
+            didReplace = true;
+        }
+
+        if (!didReplace) return false;
+
+        focusMarkdownEditor(editor);
+        setMarkdownEditorSelection(editor, selectionStart, selectionEnd);
+
+        setTimeout(function () {
+            focusMarkdownEditor(editor);
+            setMarkdownEditorSelection(editor, selectionStart, selectionEnd);
+        }, 0);
+
+        return true;
+    }
+
     /**
      * Wrap selected text with markdown syntax
      */
@@ -208,7 +356,48 @@
      * Apply markdown code block formatting
      */
     function applyMarkdownCodeBlock() {
-        wrapSelectionWithMarkdown('\n```\n', '\n```\n');
+        var sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+
+        var range = sel.getRangeAt(0);
+        var editor = getMarkdownEditorElement(range);
+        var offsets = getSelectionOffsetsInMarkdownEditor(editor, range);
+        var prefix = '\n```\n';
+        var suffix = '\n```\n';
+
+        if (!editor || !offsets) {
+            wrapSelectionWithMarkdown(prefix, suffix);
+            return;
+        }
+
+        var fullText = getMarkdownEditorValue(editor);
+        var selectedText = fullText.slice(offsets.start, offsets.end);
+        var beforeText = fullText.slice(Math.max(0, offsets.start - prefix.length), offsets.start);
+        var afterText = fullText.slice(offsets.end, offsets.end + suffix.length);
+
+        if (selectedText && beforeText === prefix && afterText === suffix) {
+            replaceMarkdownRangeAndSelect(
+                editor,
+                offsets.start - prefix.length,
+                offsets.end + suffix.length,
+                selectedText,
+                offsets.start - prefix.length,
+                offsets.start - prefix.length + selectedText.length
+            );
+            return;
+        }
+
+        var replacement = prefix + selectedText + suffix;
+        var caretOffset = offsets.start + prefix.length + selectedText.length;
+
+        replaceMarkdownRangeAndSelect(
+            editor,
+            offsets.start,
+            offsets.end,
+            replacement,
+            caretOffset,
+            caretOffset
+        );
     }
 
     /**

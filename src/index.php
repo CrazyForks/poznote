@@ -121,7 +121,7 @@ $settings = [
     'note_list_sort' => 'updated_desc',
     'notes_without_folders_after_folders' => '1',
     'code_block_word_wrap' => '1',
-    'markdown_split_card_view' => '0'
+    'markdown_split_card_view' => '1'
 ];
 
 try {

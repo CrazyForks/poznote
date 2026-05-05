@@ -539,6 +539,12 @@
       "delete_link_only": "Delete this shortcut only",
       "delete_link_and_target": "Delete the note and all its shortcuts"
     },
+    "move_linked_note": {
+      "title": "Move Shortcut",
+      "message": "What do you want to move?",
+      "move_link_only": "Move this shortcut only",
+      "move_target_note": "Move the original note"
+    },
     "convert": {
       "title": "Convert Note",
       "message": "Are you sure you want to convert this note?",

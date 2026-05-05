@@ -731,42 +731,53 @@ try {
                                         </div>
                                     </div>
                                 </div>
-                                <div class="ws-col ws-col-action">
-                                    <button class="btn btn-rename action-btn" data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>"><?php echo t_h('common.rename', [], 'Rename', $currentLang); ?></button>
-                                </div>
-                                <div class="ws-col ws-col-background">
-                                    <button class="btn btn-secondary action-btn btn-background" data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>">
-                                        <?php echo t_h('workspaces.actions.background', [], 'Background', $currentLang); ?>
-                                    </button>
-                                </div>
-                                <div class="ws-col ws-col-share">
-                                    <form method="POST" class="workspace-share-toggle-form">
-                                        <input type="hidden" name="action" value="<?php echo $workspaceReadonlyEnabled ? 'disable_readonly_share' : 'upsert_readonly_share'; ?>">
-                                        <input type="hidden" name="name" value="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>">
-                                        <button type="submit" class="btn action-btn <?php echo $workspaceReadonlyEnabled ? 'btn-danger' : 'btn-success'; ?>">
-                                            <?php echo $workspaceReadonlyEnabled
-                                                ? t_h('workspaces.share.actions.disable', [], 'Unshare', $currentLang)
-                                                : t_h('workspaces.share.actions.enable', [], 'Share', $currentLang); ?>
-                                        </button>
-                                    </form>
-                                </div>
                                 <div class="ws-col ws-col-select">
                                     <?php if ($ws !== ''): ?>
-                                        <button type="button" class="btn btn-primary action-btn btn-select" data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>"><?php echo t_h('workspaces.actions.select', [], 'Select', $currentLang); ?></button>
+                                        <button type="button" class="btn btn-primary action-btn btn-select" data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>">
+                                            <?php echo t_h('workspaces.actions.select', [], 'Select', $currentLang); ?>
+                                        </button>
                                     <?php endif; ?>
                                 </div>
-                                <div class="ws-col ws-col-move">
-                                    <button class="btn btn-warning action-btn btn-move" data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>" <?php echo ($cnt === 0 || count($workspaces) <= 1) ? 'disabled' : ''; ?>><?php echo t_h('workspaces.actions.move_notes', [], 'Move notes', $currentLang); ?></button>
+                                <div class="ws-col ws-col-share">
+                                    <button type="button"
+                                            class="btn action-btn btn-share-toggle <?php echo $workspaceReadonlyEnabled ? 'btn-danger' : 'btn-success'; ?>"
+                                            data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>"
+                                            data-action="<?php echo $workspaceReadonlyEnabled ? 'disable_readonly_share' : 'upsert_readonly_share'; ?>">
+                                        <?php echo $workspaceReadonlyEnabled
+                                            ? t_h('workspaces.share.actions.disable', [], 'Unshare', $currentLang)
+                                            : t_h('workspaces.share.actions.enable', [], 'Share', $currentLang); ?>
+                                    </button>
                                 </div>
-                                <?php if (count($workspaces) > 1): ?>
-                                <div class="ws-col ws-col-delete">
-                                    <form method="POST" class="delete-form" data-ws-name="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>">
-                                        <input type="hidden" name="action" value="delete">
-                                        <input type="hidden" name="name" value="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>">
-                                        <button type="button" class="btn btn-danger action-btn btn-delete" data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>"><?php echo t_h('common.delete', [], 'Delete', $currentLang); ?></button>
-                                    </form>
+                                <div class="ws-col ws-col-action">
+                                    <div class="ws-action-dropdown">
+                                        <button class="btn btn-secondary dropdown-toggle-btn" type="button" aria-haspopup="true" aria-expanded="false">
+                                            <?php echo t_h('common.actions', [], 'Actions', $currentLang); ?>
+                                            <i class="lucide lucide-chevron-down" style="margin-left: 5px;"></i>
+                                        </button>
+                                        <div class="dropdown-menu">
+                                            <button class="dropdown-item dropdown-item-neutral workspace-rename-action" data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>">
+                                                <i class="lucide lucide-pencil"></i> <?php echo t_h('common.rename', [], 'Rename', $currentLang); ?>
+                                            </button>
+                                            
+                                            <button class="dropdown-item dropdown-item-neutral workspace-background-action" data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>">
+                                                <i class="lucide lucide-image"></i> <?php echo t_h('workspaces.actions.background', [], 'Background', $currentLang); ?>
+                                            </button>
+                                            
+                                            <div class="dropdown-divider"></div>
+
+                                            <button class="dropdown-item btn-move" data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>" <?php echo ($cnt === 0 || count($workspaces) <= 1) ? 'disabled' : ''; ?>>
+                                                <i class="lucide lucide-move"></i> <?php echo t_h('workspaces.actions.move_notes', [], 'Move notes', $currentLang); ?>
+                                            </button>
+                                            
+                                            <?php if (count($workspaces) > 1): ?>
+                                                <div class="dropdown-divider"></div>
+                                                <button type="button" class="dropdown-item btn-delete text-danger" data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>">
+                                                    <i class="lucide lucide-trash-2"></i> <?php echo t_h('common.delete', [], 'Delete', $currentLang); ?>
+                                                </button>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
                                 </div>
-                                <?php endif; ?>
                             </li>
                         <?php endforeach; ?>
                     </ul>

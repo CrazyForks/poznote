@@ -214,7 +214,7 @@ body {
     color: #ffffff;
     cursor: pointer;
     transition: all 0.2s;
-    margin-left: 5px;
+    margin-left: 0;
 }
 
 .action-btn:hover {
@@ -494,14 +494,26 @@ body {
     
     .workspace-list .ws-col {
         width: 100% !important;
+        flex-basis: auto !important;
+    }
+
+    .workspace-list .ws-col-select,
+    .workspace-list .ws-col-share,
+    .workspace-list .ws-col-action {
+        flex-basis: auto !important;
     }
     
     .workspace-list .btn {
         width: 100% !important;
         min-width: unset !important;
-        margin-bottom: 8px !important;
+        margin-bottom: 0 !important;
         padding: 12px !important;
-        font-size: 14px !important;
+        font-size: 15px !important;
+        font-weight: 500 !important;
+        min-height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
 
     .workspace-share-panel {

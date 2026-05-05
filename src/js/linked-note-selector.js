@@ -383,6 +383,10 @@
             const data = await response.json();
             
             if (data.success && data.note && data.note.id) {
+                if (typeof window.rememberFolderStatesForCreatedNote === 'function') {
+                    window.rememberFolderStatesForCreatedNote(data.note.folder_id || folderId);
+                }
+
                 // Success - open the linked note immediately.
                 // `note` triggers backend linked-note resolution, while `select_linked_note`
                 // keeps the shortcut highlighted in the sidebar.

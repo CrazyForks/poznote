@@ -92,9 +92,13 @@ function positionMenuNearButton(menu, button) {
 /**
  * Refresh notes list after folder action (share/revoke)
  */
-function refreshNotesListAfterFolderAction() {
+function refreshNotesListAfterFolderAction(folderIdToOpen) {
     if (typeof persistFolderStatesFromDOM === 'function') {
         persistFolderStatesFromDOM();
+    }
+
+    if (folderIdToOpen !== null && folderIdToOpen !== undefined && folderIdToOpen !== '') {
+        localStorage.setItem('folder_folder-' + String(folderIdToOpen), 'open');
     }
 
     const url = new URL(window.location.href);

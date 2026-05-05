@@ -1016,6 +1016,12 @@
       "delete_link_only": "Supprimer uniquement ce raccourci",
       "delete_link_and_target": "Supprimer la note et tous ses raccourcis"
     },
+    "move_linked_note": {
+      "title": "Déplacer le raccourci",
+      "message": "Que voulez-vous déplacer ?",
+      "move_link_only": "Déplacer uniquement ce raccourci",
+      "move_target_note": "Déplacer la note originale"
+    },
     "export": {
       "title": "Exporter la note",
       "markdown": {

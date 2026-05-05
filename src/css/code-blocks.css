@@ -42,6 +42,21 @@ pre.code-block,
     box-sizing: border-box;
 }
 
+.code-block::-webkit-scrollbar-track:horizontal,
+pre.code-block::-webkit-scrollbar-track:horizontal,
+.noteentry pre::-webkit-scrollbar-track:horizontal,
+.code-block::-webkit-scrollbar-thumb:horizontal,
+pre.code-block::-webkit-scrollbar-thumb:horizontal,
+.noteentry pre::-webkit-scrollbar-thumb:horizontal {
+    cursor: grab;
+}
+
+.code-block::-webkit-scrollbar-thumb:horizontal:active,
+pre.code-block::-webkit-scrollbar-thumb:horizontal:active,
+.noteentry pre::-webkit-scrollbar-thumb:horizontal:active {
+    cursor: grabbing;
+}
+
 /* Copy & Delete icon for code blocks */
 .code-block-copy-btn,
 pre.code-block .code-block-copy-btn,
