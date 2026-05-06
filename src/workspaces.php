@@ -730,9 +730,9 @@ try {
         data-txt-show-password="<?php echo htmlspecialchars(t('login.show_password', [], 'Show password', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
         data-txt-hide-password="<?php echo htmlspecialchars(t('login.hide_password', [], 'Hide password', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
         data-txt-workspace-share-require-login="<?php echo htmlspecialchars(t('workspaces.share.options.require_login', [], 'Require Poznote login', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
-        data-txt-workspace-share-restrict-users="<?php echo htmlspecialchars(t('public.restrict_users', [], 'Restrict to specific users', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
-        data-txt-workspace-share-users-loading="<?php echo htmlspecialchars(t('public.users_loading', [], 'Loading users...', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
-        data-txt-workspace-share-no-users="<?php echo htmlspecialchars(t('public.no_users_found', [], 'No other users found', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-workspace-share-restrict-users="<?php echo htmlspecialchars(t('workspaces.share.options.restrict_users', [], 'Restrict to specific users', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-workspace-share-users-loading="<?php echo htmlspecialchars(t('workspaces.share.options.users_loading', [], 'Loading users...', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-workspace-share-no-users="<?php echo htmlspecialchars(t('workspaces.share.options.no_users_found', [], 'No other users found', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
         data-txt-workspace-share-cancel="<?php echo htmlspecialchars(t('common.cancel', [], 'Cancel', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
       <?php if (!empty($clearSelectedWorkspace) && !$isAjax): ?>
       data-clear-workspace="<?php echo htmlspecialchars(json_encode($workspaces[0] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"

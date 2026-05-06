@@ -504,13 +504,26 @@
         "confirm_button": "Compartilhar espaço de trabalho em modo somente leitura"
       },
       "messages": {
+        "enabled": "Link de espaço de trabalho só de leitura ativado",
+        "disabled": "Link de espaço de trabalho só de leitura desativado",
         "url_copied": "Link de partilha copiado para a área de transferência!"
       },
       "errors": {
-        "copy_failed": "Não foi possível copiar o link de partilha"
+        "url_in_use": "Já existe um espaço de trabalho público com este nome nesta instância do Poznote",
+        "copy_failed": "Não foi possível copiar o link de partilha",
+        "save_failed": "Não foi possível guardar o link de espaço de trabalho só de leitura",
+        "disable_failed": "Não foi possível desativar o link de espaço de trabalho só de leitura"
       },
+      "status": {
+        "enabled": "Só de leitura público ativado",
+        "disabled": "Não partilhado publicamente"
+      },
+      "help": "Qualquer pessoa com este URL abre o Poznote diretamente neste espaço de trabalho em modo só de leitura.",
       "options": {
-        "require_login": "Exigir início de sessão no Poznote"
+        "require_login": "Exigir início de sessão no Poznote",
+        "restrict_users": "Restringir a utilizadores específicos",
+        "users_loading": "A carregar utilizadores...",
+        "no_users_found": "Nenhum outro utilizador encontrado"
       }
     }
   },

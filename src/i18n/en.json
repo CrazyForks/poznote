@@ -153,6 +153,43 @@
       "reload_hint": "Reloading..."
     }
   },
+  "workspaces": {
+    "share": {
+      "actions": {
+        "enable": "Share",
+        "edit": "Edit share",
+        "copy_link": "Copy link",
+        "disable": "Unshare"
+      },
+      "confirm": {
+        "title": "Share workspace in read-only mode",
+        "message": "Anyone with the URL for workspace \"{{workspace}}\" will have access to all notes and folders in this workspace in read-only mode.",
+        "confirm_button": "Share workspace in read-only mode"
+      },
+      "messages": {
+        "enabled": "Read-only workspace link enabled",
+        "disabled": "Read-only workspace link disabled",
+        "url_copied": "Share link copied to clipboard!"
+      },
+      "errors": {
+        "url_in_use": "A public workspace with this name already exists on this Poznote instance",
+        "copy_failed": "Failed to copy share link",
+        "save_failed": "Failed to save read-only workspace link",
+        "disable_failed": "Failed to disable read-only workspace link"
+      },
+      "status": {
+        "enabled": "Public read-only enabled",
+        "disabled": "Not shared publicly"
+      },
+      "help": "Anyone with this URL opens Poznote directly on this workspace in read-only mode.",
+      "options": {
+        "require_login": "Require Poznote login",
+        "restrict_users": "Restrict to specific users",
+        "users_loading": "Loading users...",
+        "no_users_found": "No other users found"
+      }
+    }
+  },
   "display": {
     "title": "Display",
     "cards": {
@@ -457,13 +494,26 @@
           "confirm_button": "Share workspace in read-only mode"
         },
         "messages": {
+          "enabled": "Read-only workspace link enabled",
+          "disabled": "Read-only workspace link disabled",
           "url_copied": "Share link copied to clipboard!"
         },
         "errors": {
-          "copy_failed": "Failed to copy share link"
+          "url_in_use": "A public workspace with this name already exists on this Poznote instance",
+          "copy_failed": "Failed to copy share link",
+          "save_failed": "Failed to save read-only workspace link",
+          "disable_failed": "Failed to disable read-only workspace link"
         },
+        "status": {
+          "enabled": "Public read-only enabled",
+          "disabled": "Not shared publicly"
+        },
+        "help": "Anyone with this URL opens Poznote directly on this workspace in read-only mode.",
         "options": {
-          "require_login": "Require Poznote login"
+          "require_login": "Require Poznote login",
+          "restrict_users": "Restrict to specific users",
+          "users_loading": "Loading users...",
+          "no_users_found": "No other users found"
         }
       }
     },

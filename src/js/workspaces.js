@@ -774,7 +774,7 @@ function showWorkspaceShareOptionsModal(button) {
 
     var specificUsersText = document.createElement('span');
     specificUsersText.className = 'indexable-label-text';
-    specificUsersText.textContent = getWorkspaceShareText('workspace-share-restrict-users', 'Restrict to users');
+    specificUsersText.textContent = getWorkspaceShareText('workspace-share-restrict-users', 'Restrict to specific users');
 
     var specificUsersToggle = document.createElement('label');
     specificUsersToggle.className = 'toggle-switch';

@@ -516,13 +516,26 @@
         "confirm_button": "Partager l’espace de travail en lecture seule"
       },
       "messages": {
+        "enabled": "Lien d’espace de travail en lecture seule activé",
+        "disabled": "Lien d’espace de travail en lecture seule désactivé",
         "url_copied": "Lien de partage copié dans le presse-papiers !"
       },
       "errors": {
-        "copy_failed": "Impossible de copier le lien de partage"
+        "url_in_use": "Un espace de travail public avec ce nom existe déjà sur cette instance Poznote",
+        "copy_failed": "Impossible de copier le lien de partage",
+        "save_failed": "Impossible d’enregistrer le lien d’espace de travail en lecture seule",
+        "disable_failed": "Impossible de désactiver le lien d’espace de travail en lecture seule"
       },
+      "status": {
+        "enabled": "Lecture seule publique activée",
+        "disabled": "Non partagé publiquement"
+      },
+      "help": "Toute personne disposant de cette URL ouvre Poznote directement sur cet espace de travail en lecture seule.",
       "options": {
-        "require_login": "Exiger une connexion Poznote"
+        "require_login": "Exiger une connexion Poznote",
+        "restrict_users": "Restreindre à des utilisateurs spécifiques",
+        "users_loading": "Chargement des utilisateurs...",
+        "no_users_found": "Aucun autre utilisateur trouvé"
       }
     }
   },

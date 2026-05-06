@@ -505,13 +505,26 @@
         "confirm_button": "以只读模式共享工作区"
       },
       "messages": {
+        "enabled": "只读工作区链接已启用",
+        "disabled": "只读工作区链接已禁用",
         "url_copied": "分享链接已复制到剪贴板！"
       },
       "errors": {
-        "copy_failed": "无法复制分享链接"
+        "url_in_use": "此 Poznote 实例中已存在同名公共工作区",
+        "copy_failed": "无法复制分享链接",
+        "save_failed": "无法保存只读工作区链接",
+        "disable_failed": "无法禁用只读工作区链接"
       },
+      "status": {
+        "enabled": "公共只读已启用",
+        "disabled": "未公开共享"
+      },
+      "help": "任何拥有此 URL 的人都会以只读模式直接打开 Poznote 中的此工作区。",
       "options": {
-        "require_login": "需要登录 Poznote"
+        "require_login": "需要登录 Poznote",
+        "restrict_users": "限制为特定用户",
+        "users_loading": "正在加载用户...",
+        "no_users_found": "未找到其他用户"
       }
     }
   },

@@ -505,13 +505,26 @@
         "confirm_button": "Arbeitsbereich schreibgeschützt teilen"
       },
       "messages": {
+        "enabled": "Schreibgeschützter Arbeitsbereichslink aktiviert",
+        "disabled": "Schreibgeschützter Arbeitsbereichslink deaktiviert",
         "url_copied": "Freigabelink in die Zwischenablage kopiert!"
       },
       "errors": {
-        "copy_failed": "Freigabelink konnte nicht kopiert werden"
+        "url_in_use": "Ein öffentlicher Arbeitsbereich mit diesem Namen existiert bereits in dieser Poznote-Instanz",
+        "copy_failed": "Freigabelink konnte nicht kopiert werden",
+        "save_failed": "Schreibgeschützter Arbeitsbereichslink konnte nicht gespeichert werden",
+        "disable_failed": "Schreibgeschützter Arbeitsbereichslink konnte nicht deaktiviert werden"
       },
+      "status": {
+        "enabled": "Öffentlicher schreibgeschützter Zugriff aktiviert",
+        "disabled": "Nicht öffentlich geteilt"
+      },
+      "help": "Jede Person mit dieser URL öffnet Poznote direkt in diesem Arbeitsbereich im schreibgeschützten Modus.",
       "options": {
-        "require_login": "Poznote-Anmeldung erforderlich"
+        "require_login": "Poznote-Anmeldung erforderlich",
+        "restrict_users": "Auf bestimmte Benutzer beschränken",
+        "users_loading": "Benutzer werden geladen...",
+        "no_users_found": "Keine anderen Benutzer gefunden"
       }
     }
   },
