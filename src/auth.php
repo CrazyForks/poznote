@@ -272,6 +272,9 @@ function getPublicWorkspaceAccess(): ?array {
 
     $access['workspace_name'] = $workspaceName;
     $access['user_id'] = $userId;
+    $access['target_id'] = isset($access['target_id']) ? (int)$access['target_id'] : 0;
+    $access['registry_key'] = trim((string)($access['registry_key'] ?? buildPublicWorkspaceRegistryKey($workspaceName)));
+    $access['viewer_user_id'] = isset($access['viewer_user_id']) ? max(0, (int)$access['viewer_user_id']) : 0;
     return $access;
 }
 
@@ -388,6 +391,27 @@ function isRealUserAuthenticated(): bool {
     return !(is_array($user) && !empty($user['_public_workspace']));
 }
 
+function clearPublicWorkspaceAuthentication(): void {
+    $user = $_SESSION['user'] ?? null;
+    $isPublicWorkspaceAuth = ($_SESSION['auth_method'] ?? '') === 'public_workspace'
+        || (is_array($user) && !empty($user['_public_workspace']));
+
+    unset($_SESSION['public_workspace_access']);
+
+    if ($isPublicWorkspaceAuth) {
+        unset($_SESSION['authenticated'], $_SESSION['user_id'], $_SESSION['user'], $_SESSION['auth_method']);
+    }
+}
+
+function getPublicWorkspaceViewerUserId(): int {
+    if (isRealUserAuthenticated()) {
+        return isset($_SESSION['user_id']) ? max(0, (int)$_SESSION['user_id']) : 0;
+    }
+
+    $access = getPublicWorkspaceAccess();
+    return $access !== null ? max(0, (int)($access['viewer_user_id'] ?? 0)) : 0;
+}
+
 function getCurrentRelativeRequestUri(): string {
     $requestUri = (string)($_SERVER['REQUEST_URI'] ?? 'index.php');
     if ($requestUri === '' || preg_match('#^[a-zA-Z][a-zA-Z0-9+.-]*://#', $requestUri) || str_starts_with($requestUri, '//')) {
@@ -439,6 +463,10 @@ function renderPublicWorkspaceLoginRequiredPage(array $workspaceAccess): void {
         $redirect .= (strpos($redirect, '?') === false ? '?' : '&') . 'public_workspace=1';
     }
     $_SESSION['post_login_redirect'] = $redirect;
+
+    if (!isRealUserAuthenticated()) {
+        clearPublicWorkspaceAuthentication();
+    }
 
     renderPublicStatusPage($currentLang, [
         'status' => 403,
@@ -504,7 +532,7 @@ function renderPublicWorkspacePasswordPage(array $workspaceAccess, bool $passwor
     exit;
 }
 
-function authorizePublicWorkspaceRequest(array $workspaceAccess): bool {
+function authorizePublicWorkspaceRequest(array $workspaceAccess, ?int $viewerUserId = null): bool {
     $allowedUserIds = decodePublicWorkspaceAllowedUsers($workspaceAccess['allowed_users'] ?? null);
     $loginRequired = !empty($workspaceAccess['login_required']) || !empty($allowedUserIds);
 
@@ -512,21 +540,21 @@ function authorizePublicWorkspaceRequest(array $workspaceAccess): bool {
         return false;
     }
 
-    if (!isRealUserAuthenticated()) {
+    $viewerUserId = $viewerUserId !== null ? max(0, $viewerUserId) : getPublicWorkspaceViewerUserId();
+    if ($viewerUserId <= 0) {
         renderPublicWorkspaceLoginRequiredPage($workspaceAccess);
     }
 
-    $currentUserId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
     $ownerId = (int)($workspaceAccess['user_id'] ?? 0);
-    if ($currentUserId <= 0) {
-        renderPublicWorkspaceLoginRequiredPage($workspaceAccess);
-    }
-
-    if (!empty($allowedUserIds) && $currentUserId !== $ownerId && !in_array($currentUserId, $allowedUserIds, true)) {
+    if (!empty($allowedUserIds) && $viewerUserId !== $ownerId && !in_array($viewerUserId, $allowedUserIds, true)) {
         renderPublicWorkspaceAccessDeniedPage($workspaceAccess);
     }
 
     return true;
+}
+
+function getPublicWorkspacePasswordProof(array $workspaceAccess): string {
+    return hash('sha256', (string)($workspaceAccess['password'] ?? ''));
 }
 
 function enforcePublicWorkspacePassword(array $workspaceAccess, bool $passedUserRestriction): void {
@@ -542,7 +570,7 @@ function enforcePublicWorkspacePassword(array $workspaceAccess, bool $passedUser
     if (isset($_POST['workspace_password'])) {
         $submittedPassword = (string)$_POST['workspace_password'];
         if (password_verify($submittedPassword, $storedPassword)) {
-            $_SESSION[$sessionKey] = true;
+            $_SESSION[$sessionKey] = getPublicWorkspacePasswordProof($workspaceAccess);
             if ($workspaceName !== '') {
                 header('Location: ' . buildExplicitPublicWorkspaceUrl($workspaceName));
                 exit;
@@ -552,16 +580,21 @@ function enforcePublicWorkspacePassword(array $workspaceAccess, bool $passedUser
         }
     }
 
-    if (empty($_SESSION[$sessionKey])) {
+    $passwordProof = $_SESSION[$sessionKey] ?? null;
+    if (!is_string($passwordProof) || !hash_equals(getPublicWorkspacePasswordProof($workspaceAccess), $passwordProof)) {
         renderPublicWorkspacePasswordPage($workspaceAccess, $passwordError);
     }
 }
 
-function activatePublicWorkspaceAccess(array $workspaceAccess): void {
+function activatePublicWorkspaceAccess(array $workspaceAccess, int $viewerUserId = 0): void {
     $userId = (int)($workspaceAccess['user_id'] ?? 0);
     $workspaceName = trim((string)($workspaceAccess['workspace_name'] ?? ''));
     if ($userId <= 0 || $workspaceName === '') {
         return;
+    }
+
+    if ($viewerUserId <= 0 && isRealUserAuthenticated()) {
+        $viewerUserId = isset($_SESSION['user_id']) ? max(0, (int)$_SESSION['user_id']) : 0;
     }
 
     $_SESSION['authenticated'] = true;
@@ -578,17 +611,32 @@ function activatePublicWorkspaceAccess(array $workspaceAccess): void {
         'workspace_name' => $workspaceName,
         'target_id' => (int)($workspaceAccess['target_id'] ?? 0),
         'registry_key' => (string)($workspaceAccess['registry_key'] ?? ''),
+        'viewer_user_id' => max(0, $viewerUserId),
         'activated_at' => time(),
     ];
 }
 
 function maybeAuthenticatePublicWorkspaceRequest(): bool {
-    if (isPublicWorkspaceAccessActive()) {
+    $activeAccess = getPublicWorkspaceAccess();
+    $explicitPublicWorkspaceRequest = isExplicitPublicWorkspaceRequest();
+
+    if ($activeAccess !== null && !$explicitPublicWorkspaceRequest) {
+        $workspaceAccess = resolvePublicWorkspaceAccess((string)$activeAccess['workspace_name']);
+        if ($workspaceAccess === null) {
+            clearPublicWorkspaceAuthentication();
+            return false;
+        }
+
+        $viewerUserId = max(0, (int)($activeAccess['viewer_user_id'] ?? 0));
+        $passedUserRestriction = authorizePublicWorkspaceRequest($workspaceAccess, $viewerUserId);
+        enforcePublicWorkspacePassword($workspaceAccess, $passedUserRestriction);
+
+        activatePublicWorkspaceAccess($workspaceAccess, $viewerUserId);
         return true;
     }
 
     $alreadyAuthenticated = isAuthenticated();
-    if ($alreadyAuthenticated && !isExplicitPublicWorkspaceRequest()) {
+    if ($alreadyAuthenticated && !$explicitPublicWorkspaceRequest) {
         return false;
     }
 
@@ -599,13 +647,17 @@ function maybeAuthenticatePublicWorkspaceRequest(): bool {
 
     $workspaceAccess = resolvePublicWorkspaceAccess($workspaceName);
     if ($workspaceAccess === null) {
+        if ($activeAccess !== null) {
+            clearPublicWorkspaceAuthentication();
+        }
         return false;
     }
 
-    $passedUserRestriction = authorizePublicWorkspaceRequest($workspaceAccess);
+    $viewerUserId = getPublicWorkspaceViewerUserId();
+    $passedUserRestriction = authorizePublicWorkspaceRequest($workspaceAccess, $viewerUserId);
     enforcePublicWorkspacePassword($workspaceAccess, $passedUserRestriction);
 
-    activatePublicWorkspaceAccess($workspaceAccess);
+    activatePublicWorkspaceAccess($workspaceAccess, $viewerUserId);
     return true;
 }
 

@@ -244,6 +244,7 @@
     flex-wrap: wrap;
     gap: 10px;
     margin-top: 24px;
+    box-sizing: border-box;
 }
 
 .status-card-action {
@@ -258,6 +259,7 @@
     text-decoration: none;
     font-weight: 500;
     transition: background-color 0.18s ease;
+    box-sizing: border-box;
 }
 
 .status-card-action:hover {
