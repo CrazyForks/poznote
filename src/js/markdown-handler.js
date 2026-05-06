@@ -1350,6 +1350,70 @@ function parseMarkdown(text) {
         return normalizedLanguage === 'normal' || normalizedLanguage === 'code';
     }
 
+    function isSyntaxHighlightLanguage(language) {
+        const normalizedLanguage = language ? language.trim().toLowerCase() : '';
+        if (!normalizedLanguage) return false;
+
+        if (typeof hljs !== 'undefined' && hljs && typeof hljs.getLanguage === 'function') {
+            return !!hljs.getLanguage(normalizedLanguage);
+        }
+
+        const fallbackLanguages = {
+            bash: true, sh: true, c: true, cpp: true, 'c++': true, csharp: true, cs: true, 'c#': true,
+            css: true, diff: true, patch: true, go: true, graphql: true, gql: true, ini: true,
+            java: true, javascript: true, js: true, jsx: true, mjs: true, cjs: true, json: true,
+            kotlin: true, less: true, lua: true, makefile: true, markdown: true, md: true,
+            objectivec: true, objc: true, perl: true, php: true, 'php-template': true,
+            plaintext: true, text: true, txt: true, python: true, py: true, gyp: true, ipython: true,
+            'python-repl': true, pycon: true, r: true, ruby: true, rb: true, rust: true, rs: true,
+            scss: true, shell: true, console: true, shellsession: true, sql: true, swift: true,
+            typescript: true, ts: true, tsx: true, mts: true, cts: true, vbnet: true, wasm: true,
+            xml: true, html: true, xhtml: true, svg: true, yaml: true, yml: true
+        };
+
+        return !!fallbackLanguages[normalizedLanguage];
+    }
+
+    function isPlainFormattingCodeBlockLanguage(language) {
+        const normalizedLanguage = language ? language.trim().toLowerCase() : '';
+        return normalizedLanguage !== '' && (isPlainCodeBlockLanguage(normalizedLanguage) || !isSyntaxHighlightLanguage(normalizedLanguage));
+    }
+
+    function getPlainCodeBlockDisplayLanguage(language) {
+        if (isPlainCodeBlockLanguage(language)) {
+            return 'CODE';
+        }
+
+        return language ? language.trim() : 'CODE';
+    }
+
+    function applyPlainCodeInlineStyles(html) {
+        return String(html || '')
+            .replace(/\*\*\*(?=\S)([\s\S]*?\S)\*\*\*/g, '<strong><em>$1</em></strong>')
+            .replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>')
+            .replace(/(?<!\*)\*(?!\*)(?=\S)([\s\S]*?\S)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+            .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '<del>$1</del>')
+            .replace(/==(?=\S)([\s\S]*?\S)==/g, '<mark>$1</mark>')
+            .replace(/&lt;u&gt;(?=\S)([\s\S]*?\S)&lt;\/u&gt;/gi, '<u>$1</u>');
+    }
+
+    function renderPlainCodeBlockContent(code) {
+        var protectedSpans = [];
+        var spanIndex = 0;
+        var text = String(code || '').replace(/<span\s+style=(["'])(.*?)\1>([^<]*)<\/span>/gi, function (match, quote, styleAttr, content) {
+            var placeholder = '\x00MDCODESPAN' + spanIndex + '\x00';
+            var spanContent = applyPlainCodeInlineStyles(escapeHtml(content));
+            protectedSpans[spanIndex] = '<span style="' + escapeHtml(styleAttr) + '">' + spanContent + '</span>';
+            spanIndex++;
+            return placeholder;
+        });
+
+        var html = applyPlainCodeInlineStyles(escapeHtml(text));
+        return html.replace(/\x00MDCODESPAN(\d+)\x00/g, function (match, index) {
+            return protectedSpans[parseInt(index, 10)] || match;
+        });
+    }
+
     function isSafeExcalidrawUrl(src) {
         var value = String(src || '').trim();
         return /^(https?:\/\/|\/|\.\/|\.\.\/)/i.test(value) || /^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(value);
@@ -1901,13 +1965,15 @@ function parseMarkdown(text) {
                         .replace(/&#039;/g, "'");
                     result.push(_mdRenderMermaidBlock(unescapedContent));
                 } else {
-                    let escapedCodeContent = escapeHtml(codeContent);
                     let escapedCodeBlockLang = escapeHtml(codeBlockLang || '');
-                    if (isPlainCodeBlockLanguage(codeBlockLang)) {
-                        result.push('<pre data-language="CODE"><code data-language="CODE">' + escapedCodeContent + '</code></pre>');
-                    } else if (codeBlockLang) {
+                    if (isPlainFormattingCodeBlockLanguage(codeBlockLang)) {
+                        let plainCodeBlockLang = escapeHtml(getPlainCodeBlockDisplayLanguage(codeBlockLang));
+                        result.push('<pre data-language="' + plainCodeBlockLang + '"><code data-language="' + plainCodeBlockLang + '">' + renderPlainCodeBlockContent(codeContent) + '</code></pre>');
+                    } else if (codeBlockLang && isSyntaxHighlightLanguage(codeBlockLang)) {
+                        let escapedCodeContent = escapeHtml(codeContent);
                         result.push('<pre data-language="' + escapedCodeBlockLang + '"><code class="language-' + escapedCodeBlockLang + '">' + escapedCodeContent + '</code></pre>');
                     } else {
+                        let escapedCodeContent = escapeHtml(codeContent);
                         result.push('<pre><code>' + escapedCodeContent + '</code></pre>');
                     }
                 }
@@ -2391,12 +2457,14 @@ function parseMarkdown(text) {
     // Handle unclosed code block
     if (inCodeBlock && codeBlockContent.length > 0) {
         let codeContent = codeBlockContent.join('\n');
-        if (isPlainCodeBlockLanguage(codeBlockLang)) {
-            result.push('<pre data-language="CODE"><code data-language="CODE">' + codeContent + '</code></pre>');
-        } else if (codeBlockLang) {
-            result.push('<pre><code class="language-' + codeBlockLang + '">' + codeContent + '</code></pre>');
+        if (isPlainFormattingCodeBlockLanguage(codeBlockLang)) {
+            let plainCodeBlockLang = escapeHtml(getPlainCodeBlockDisplayLanguage(codeBlockLang));
+            result.push('<pre data-language="' + plainCodeBlockLang + '"><code data-language="' + plainCodeBlockLang + '">' + renderPlainCodeBlockContent(codeContent) + '</code></pre>');
+        } else if (codeBlockLang && isSyntaxHighlightLanguage(codeBlockLang)) {
+            let escapedCodeBlockLang = escapeHtml(codeBlockLang || '');
+            result.push('<pre><code class="language-' + escapedCodeBlockLang + '">' + escapeHtml(codeContent) + '</code></pre>');
         } else {
-            result.push('<pre><code>' + codeContent + '</code></pre>');
+            result.push('<pre><code>' + escapeHtml(codeContent) + '</code></pre>');
         }
     }
 

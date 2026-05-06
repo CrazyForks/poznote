@@ -32,7 +32,7 @@
       "oidc_button": "Continuar con {{provider}}",
       "documentation": "Documentación de Poznote",
       "redirecting": "Redirigiendo...",
-        "admin_warning": "Inicie sesión con el nombre de usuario <code>{{username}}</code> y la contraseña actual de esta cuenta. Luego podrá cambiar el nombre de esta cuenta en la configuración para mayor seguridad.",
+      "admin_warning": "Inicie sesión con el nombre de usuario <code>{{username}}</code> y la contraseña actual de esta cuenta. Luego podrá cambiar el nombre de esta cuenta en la configuración para mayor seguridad.",
       "errors": {
         "invalid_credentials": "Usuario o contraseña incorrectos."
       }
@@ -495,22 +495,35 @@
       "actions": {
         "enable": "Compartir",
         "edit": "Editar uso compartido",
-        "copy_link": "Copiar enlace compartido",
+        "copy_link": "Copiar enlace",
         "disable": "Dejar de compartir"
       },
       "confirm": {
-        "title": "Compartir espacio de trabajo",
-        "message": "Cualquier persona con la URL del espacio de trabajo \"{{workspace}}\" tendrá acceso a todas las notas y carpetas de este espacio de trabajo.\n\nNo podrá modificar nada. Solo podrá consultar el contenido.",
-        "confirm_button": "Compartir espacio de trabajo"
+        "title": "Compartir espacio de trabajo en modo solo lectura",
+        "message": "Cualquier persona con la URL del espacio de trabajo \"{{workspace}}\" tendrá acceso a todas las notas y carpetas de este espacio de trabajo en modo solo lectura.",
+        "confirm_button": "Compartir espacio de trabajo en modo solo lectura"
       },
       "messages": {
+        "enabled": "Enlace de espacio de trabajo de solo lectura activado",
+        "disabled": "Enlace de espacio de trabajo de solo lectura desactivado",
         "url_copied": "¡Enlace compartido copiado al portapapeles!"
       },
       "errors": {
-        "copy_failed": "No se pudo copiar el enlace compartido"
+        "url_in_use": "Ya existe un espacio de trabajo público con este nombre en esta instancia de Poznote",
+        "copy_failed": "No se pudo copiar el enlace compartido",
+        "save_failed": "No se pudo guardar el enlace de espacio de trabajo de solo lectura",
+        "disable_failed": "No se pudo desactivar el enlace de espacio de trabajo de solo lectura"
       },
+      "status": {
+        "enabled": "Solo lectura pública activada",
+        "disabled": "No compartido públicamente"
+      },
+      "help": "Cualquier persona con esta URL abre Poznote directamente en este espacio de trabajo en modo solo lectura.",
       "options": {
-        "require_login": "Requerir inicio de sesión en Poznote"
+        "require_login": "Requerir inicio de sesión en Poznote",
+        "restrict_users": "Restringir a usuarios específicos",
+        "users_loading": "Cargando usuarios...",
+        "no_users_found": "No se encontraron otros usuarios"
       }
     }
   },
@@ -1430,7 +1443,7 @@
     "redirecting": "Redirigiendo...",
     "show_password": "Mostrar contraseña",
     "hide_password": "Ocultar contraseña",
-      "admin_warning": "Inicie sesión con el nombre de usuario <code>{{username}}</code> y la contraseña actual de esta cuenta. Luego podrá cambiar el nombre de esta cuenta en la configuración para mayor seguridad.",
+    "admin_warning": "Inicie sesión con el nombre de usuario <code>{{username}}</code> y la contraseña actual de esta cuenta. Luego podrá cambiar el nombre de esta cuenta en la configuración para mayor seguridad.",
     "fields": {
       "username": "Nombre de usuario",
       "username_or_email": "Nombre de usuario o correo electrónico",
@@ -1743,7 +1756,7 @@
     "no_shared_folders": "Aún no hay carpetas compartidas.",
     "no_shares": "Sin compartidos aún.",
     "no_shares_hint": "Comparte una nota o carpeta haciendo clic en el botón de nube en la barra de herramientas.",
-    "restrict_users": "Restringir a usuarios específicos",
+    "restrict_users": "Restringir a usuarios",
     "restrict_users_mobile": "Restringir",
     "restrict_users_placeholder": "Seleccionar usuarios...",
     "restricted_badge": "Restringido",

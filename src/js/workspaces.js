@@ -553,23 +553,6 @@ function getCurrentWorkspaceUserId() {
     return isNaN(parsed) ? 0 : parsed;
 }
 
-function getCurrentWorkspaceShareTheme() {
-    if (typeof window.getCurrentTheme === 'function') {
-        var currentTheme = window.getCurrentTheme();
-        if (currentTheme === 'dark' || currentTheme === 'light') return currentTheme;
-    }
-
-    var documentTheme = document.documentElement ? document.documentElement.getAttribute('data-theme') : '';
-    if (documentTheme === 'dark' || documentTheme === 'light') return documentTheme;
-
-    try {
-        var storedTheme = localStorage.getItem('poznote-theme');
-        return storedTheme === 'dark' ? 'dark' : 'light';
-    } catch (e) {
-        return 'light';
-    }
-}
-
 function updateWorkspaceShareToggleButton(button, isShared, shareState) {
     if (!button) return;
 
@@ -594,7 +577,6 @@ function updateWorkspaceShareToggleButton(button, isShared, shareState) {
         button.setAttribute('data-password-value', shareState.hasPassword ? (shareState.passwordValue || '') : '');
         button.setAttribute('data-login-required', shareState.loginRequired ? '1' : '0');
         button.setAttribute('data-allowed-users', JSON.stringify(shareState.allowed_users || []));
-        button.setAttribute('data-theme', shareState.theme || '');
     }
 
     if (!isShared) {
@@ -703,7 +685,7 @@ function showWorkspaceShareOptionsModal(button) {
     passwordGroup.className = 'shared-edit-token-inline-group';
 
     var passwordInput = document.createElement('input');
-    passwordInput.type = 'text';
+    passwordInput.type = 'password';
     passwordInput.value = currentPasswordValue;
     passwordInput.placeholder = getWorkspaceShareText('workspace-share-password-placeholder', 'Enter a password');
     passwordInput.className = 'modal-password-input';
@@ -923,6 +905,7 @@ function showWorkspaceShareOptionsModal(button) {
                         getWorkspaceShareText('workspace-share-copy-success', 'Share link copied to clipboard!'),
                         'success'
                     );
+                    closeModal();
                 })
                 .catch(function (err) {
                     console.error('Error copying workspace share URL from modal:', err);
@@ -981,7 +964,6 @@ function showWorkspaceShareOptionsModal(button) {
         if (copyUrlBtn) copyUrlBtn.disabled = true;
         submitWorkspaceShareToggle(button, {
             password: passwordValue,
-            theme: getCurrentWorkspaceShareTheme(),
             login_required: loginCheckbox.checked,
             allowed_users: loginCheckbox.checked && specificUsersCheckbox.checked ? selectedUserIds.slice() : []
         }).then(function (json) {
@@ -1062,9 +1044,6 @@ function submitWorkspaceShareToggle(button, options) {
     }
     if (options && Object.prototype.hasOwnProperty.call(options, 'allowed_users')) {
         params.set('allowed_users', JSON.stringify(options.allowed_users || []));
-    }
-    if (options && Object.prototype.hasOwnProperty.call(options, 'theme')) {
-        params.set('theme', options.theme === 'dark' ? 'dark' : 'light');
     }
 
     return fetch('workspaces.php', {
@@ -1279,8 +1258,7 @@ function handleWorkspaceReadonlyShareSave(e) {
 
     var params = new URLSearchParams({
         action: 'upsert_readonly_share',
-        name: workspaceName,
-        theme: getCurrentWorkspaceShareTheme()
+        name: workspaceName
     });
 
     fetch('workspaces.php', {

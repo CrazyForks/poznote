@@ -1,5 +1,4 @@
 body.public-workspace-readonly .sidebar-settings,
-body.public-workspace-readonly .sidebar-plus,
 body.public-workspace-readonly .workspace-dropdown-icon,
 body.public-workspace-readonly .workspace-menu,
 body.public-workspace-readonly .folder-actions,
@@ -56,4 +55,46 @@ body.public-workspace-readonly .code-block-copy-btn {
 body.public-workspace-readonly .sidebar-title,
 body.public-workspace-readonly .folder-wrapper .folder_name {
     pointer-events: none;
+}
+
+.public-workspace-theme-toggle {
+    position: static;
+    width: auto;
+    height: auto;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.public-workspace-theme-toggle:hover,
+.public-workspace-theme-toggle:focus,
+.public-workspace-theme-toggle:focus-visible {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.public-workspace-theme-toggle i,
+.public-workspace-theme-toggle [class*="lucide-"] {
+    width: 18px;
+    height: 18px;
+    pointer-events: none;
+}
+
+html[data-theme='dark'] .public-workspace-theme-toggle,
+body.dark-mode .public-workspace-theme-toggle {
+    color: #e5e7eb;
+}
+
+html[data-theme='dark'] .public-workspace-theme-toggle:hover,
+html[data-theme='dark'] .public-workspace-theme-toggle:focus-visible,
+body.dark-mode .public-workspace-theme-toggle:hover,
+body.dark-mode .public-workspace-theme-toggle:focus-visible {
+    background: transparent !important;
+    color: #ffffff;
 }

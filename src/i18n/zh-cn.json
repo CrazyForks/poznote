@@ -496,22 +496,35 @@
       "actions": {
         "enable": "共享",
         "edit": "编辑共享",
-        "copy_link": "复制分享链接",
+        "copy_link": "复制链接",
         "disable": "取消共享"
       },
       "confirm": {
-        "title": "共享工作区",
-        "message": "任何拥有工作区“{{workspace}}”URL 的人都可以访问此工作区中的所有笔记和文件夹。\n\n他们无法修改任何内容，只能查看。",
-        "confirm_button": "共享工作区"
+        "title": "以只读模式共享工作区",
+        "message": "任何拥有工作区“{{workspace}}”URL 的人都可以以只读模式访问此工作区中的所有笔记和文件夹。",
+        "confirm_button": "以只读模式共享工作区"
       },
       "messages": {
+        "enabled": "只读工作区链接已启用",
+        "disabled": "只读工作区链接已禁用",
         "url_copied": "分享链接已复制到剪贴板！"
       },
       "errors": {
-        "copy_failed": "无法复制分享链接"
+        "url_in_use": "此 Poznote 实例中已存在同名公共工作区",
+        "copy_failed": "无法复制分享链接",
+        "save_failed": "无法保存只读工作区链接",
+        "disable_failed": "无法禁用只读工作区链接"
       },
+      "status": {
+        "enabled": "公共只读已启用",
+        "disabled": "未公开共享"
+      },
+      "help": "任何拥有此 URL 的人都会以只读模式直接打开 Poznote 中的此工作区。",
       "options": {
-        "require_login": "需要登录 Poznote"
+        "require_login": "需要登录 Poznote",
+        "restrict_users": "限制为特定用户",
+        "users_loading": "正在加载用户...",
+        "no_users_found": "未找到其他用户"
       }
     }
   },
@@ -1430,7 +1443,7 @@
     "redirecting": "正在重定向...",
     "show_password": "显示密码",
     "hide_password": "隐藏密码",
-      "admin_warning": "请使用用户名 <code>{{username}}</code> 和此帐户的当前密码登录，然后可在设置中重命名此帐户以提高安全性。",
+    "admin_warning": "请使用用户名 <code>{{username}}</code> 和此帐户的当前密码登录，然后可在设置中重命名此帐户以提高安全性。",
     "fields": {
       "username": "用户名",
       "username_or_email": "用户名或邮箱",
@@ -1743,7 +1756,7 @@
     "no_shared_folders": "目前还没有共享文件夹。",
     "no_shares": "暂无共享。",
     "no_shares_hint": "点击工具栏中的云按钮即可分享笔记或文件夹。",
-    "restrict_users": "限制为特定用户",
+    "restrict_users": "限制用户",
     "restrict_users_mobile": "限制",
     "restrict_users_placeholder": "选择用户...",
     "restricted_badge": "已限制",
@@ -2135,18 +2148,18 @@
         "manage_password": "密码",
         "reset_password": "重置密码",
         "set_password": "设置密码",
-          "reset_to_default": "重置为默认密码",
-          "modal_help": "为此账户设置自定义密码，或恢复为默认密码。",
+        "reset_to_default": "重置为默认密码",
+        "modal_help": "为此账户设置自定义密码，或恢复为默认密码。",
         "current_mode": "当前模式",
-          "set_help": "至少 4 个字符。",
-          "reset_help": "删除自定义密码，并恢复为该用户的默认密码。",
-          "reset_confirm": "将“{{username}}”的密码重置为默认值？",
+        "set_help": "至少 4 个字符。",
+        "reset_help": "删除自定义密码，并恢复为该用户的默认密码。",
+        "reset_confirm": "将“{{username}}”的密码重置为默认值？",
         "set_success": "密码更新成功。",
-          "reset_success": "密码已重置为默认值。",
+        "reset_success": "密码已重置为默认值。",
         "status_custom": "自定义",
         "status_default": "默认",
         "status_custom_detail": "该用户使用自定义密码。",
-          "status_default_detail": "该用户使用默认密码。",
+        "status_default_detail": "该用户使用默认密码。",
         "changed_at_prefix": "更新时间："
       },
       "password": "密码",

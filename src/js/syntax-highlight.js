@@ -29,6 +29,11 @@
         }, 0);
     }
 
+    function isKnownSyntaxHighlightLanguage(language) {
+        var normalizedLanguage = String(language || '').trim().toLowerCase();
+        return !!(normalizedLanguage && typeof hljs !== 'undefined' && hljs && typeof hljs.getLanguage === 'function' && hljs.getLanguage(normalizedLanguage));
+    }
+
     /**
      * Apply syntax highlighting to all code blocks in a container
      * @param {HTMLElement} container - The container to search for code blocks (optional, defaults to document)
@@ -64,6 +69,10 @@
             // Extract language from code element's class
             var languageMatch = codeBlock.className.match(/language-([\w-]+)/);
             var language = languageMatch ? languageMatch[1] : null;
+
+            if (language && !isKnownSyntaxHighlightLanguage(language)) {
+                return;
+            }
             
             // Save the data-language attribute if it exists
             var dataLanguage = codeBlock.getAttribute('data-language') || 

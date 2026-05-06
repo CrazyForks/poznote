@@ -257,11 +257,6 @@ function buildPublicWorkspaceRegistryKey(string $workspaceName): string {
     return $normalizedWorkspaceName !== '' ? 'workspace:' . $normalizedWorkspaceName : '';
 }
 
-function normalizePublicWorkspaceTheme($theme): ?string {
-    $theme = strtolower(trim((string)$theme));
-    return in_array($theme, ['dark', 'light'], true) ? $theme : null;
-}
-
 function getPublicWorkspaceAccess(): ?array {
     $access = $_SESSION['public_workspace_access'] ?? null;
     if (!is_array($access)) {
@@ -277,17 +272,15 @@ function getPublicWorkspaceAccess(): ?array {
 
     $access['workspace_name'] = $workspaceName;
     $access['user_id'] = $userId;
+    $access['target_id'] = isset($access['target_id']) ? (int)$access['target_id'] : 0;
+    $access['registry_key'] = trim((string)($access['registry_key'] ?? buildPublicWorkspaceRegistryKey($workspaceName)));
+    $access['viewer_user_id'] = isset($access['viewer_user_id']) ? max(0, (int)$access['viewer_user_id']) : 0;
     return $access;
 }
 
 function getPublicWorkspaceName(): ?string {
     $access = getPublicWorkspaceAccess();
     return $access['workspace_name'] ?? null;
-}
-
-function getPublicWorkspaceTheme(): ?string {
-    $access = getPublicWorkspaceAccess();
-    return $access !== null ? normalizePublicWorkspaceTheme($access['theme'] ?? null) : null;
 }
 
 function isPublicWorkspaceAccessActive(): bool {
@@ -370,7 +363,6 @@ function resolvePublicWorkspaceAccess(string $workspaceName): ?array {
             'workspace_name' => $resolvedWorkspaceName,
             'target_id' => $targetId,
             'registry_key' => $registryKey,
-            'theme' => normalizePublicWorkspaceTheme($sharedWorkspace['theme'] ?? null),
             'password' => $sharedWorkspace['password'] ?? null,
             'login_required' => !empty($sharedWorkspace['login_required']),
             'allowed_users' => $sharedWorkspace['allowed_users'] ?? null,
@@ -397,6 +389,27 @@ function isRealUserAuthenticated(): bool {
 
     $user = $_SESSION['user'] ?? null;
     return !(is_array($user) && !empty($user['_public_workspace']));
+}
+
+function clearPublicWorkspaceAuthentication(): void {
+    $user = $_SESSION['user'] ?? null;
+    $isPublicWorkspaceAuth = ($_SESSION['auth_method'] ?? '') === 'public_workspace'
+        || (is_array($user) && !empty($user['_public_workspace']));
+
+    unset($_SESSION['public_workspace_access']);
+
+    if ($isPublicWorkspaceAuth) {
+        unset($_SESSION['authenticated'], $_SESSION['user_id'], $_SESSION['user'], $_SESSION['auth_method']);
+    }
+}
+
+function getPublicWorkspaceViewerUserId(): int {
+    if (isRealUserAuthenticated()) {
+        return isset($_SESSION['user_id']) ? max(0, (int)$_SESSION['user_id']) : 0;
+    }
+
+    $access = getPublicWorkspaceAccess();
+    return $access !== null ? max(0, (int)($access['viewer_user_id'] ?? 0)) : 0;
 }
 
 function getCurrentRelativeRequestUri(): string {
@@ -451,11 +464,14 @@ function renderPublicWorkspaceLoginRequiredPage(array $workspaceAccess): void {
     }
     $_SESSION['post_login_redirect'] = $redirect;
 
+    if (!isRealUserAuthenticated()) {
+        clearPublicWorkspaceAuthentication();
+    }
+
     renderPublicStatusPage($currentLang, [
         'status' => 403,
         'title' => t_h('public.login_required_title', [], 'Login Required', $currentLang),
         'message' => t_h('public.login_required_message', [], 'This content is restricted to specific users. Please log in to access it.', $currentLang),
-        'theme' => normalizePublicWorkspaceTheme($workspaceAccess['theme'] ?? null),
         'actions' => [
             [
                 'href' => '/login.php?redirect=' . rawurlencode($redirect),
@@ -472,7 +488,6 @@ function renderPublicWorkspaceAccessDeniedPage(array $workspaceAccess = []): voi
         'status' => 403,
         'title' => t_h('public.access_denied_title', [], 'Access Denied', $currentLang),
         'message' => t_h('public.access_denied_message', [], 'You do not have permission to view this content.', $currentLang),
-        'theme' => normalizePublicWorkspaceTheme($workspaceAccess['theme'] ?? null),
         'actions' => [
             [
                 'href' => '/index.php',
@@ -495,7 +510,6 @@ function renderPublicWorkspacePasswordPage(array $workspaceAccess, bool $passwor
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="robots" content="noindex, nofollow">
         <title><?php echo t_h('public.protection.title', [], 'Password Protected', $currentLang); ?></title>
-        <?php if (function_exists('renderPublicForcedThemeScript')) renderPublicForcedThemeScript($workspaceAccess['theme'] ?? null); ?>
         <script src="<?php echo htmlspecialchars($themeInitHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>"></script>
         <link rel="stylesheet" href="<?php echo htmlspecialchars($stylesheetHref, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?>">
     </head>
@@ -518,7 +532,7 @@ function renderPublicWorkspacePasswordPage(array $workspaceAccess, bool $passwor
     exit;
 }
 
-function authorizePublicWorkspaceRequest(array $workspaceAccess): bool {
+function authorizePublicWorkspaceRequest(array $workspaceAccess, ?int $viewerUserId = null): bool {
     $allowedUserIds = decodePublicWorkspaceAllowedUsers($workspaceAccess['allowed_users'] ?? null);
     $loginRequired = !empty($workspaceAccess['login_required']) || !empty($allowedUserIds);
 
@@ -526,21 +540,21 @@ function authorizePublicWorkspaceRequest(array $workspaceAccess): bool {
         return false;
     }
 
-    if (!isRealUserAuthenticated()) {
+    $viewerUserId = $viewerUserId !== null ? max(0, $viewerUserId) : getPublicWorkspaceViewerUserId();
+    if ($viewerUserId <= 0) {
         renderPublicWorkspaceLoginRequiredPage($workspaceAccess);
     }
 
-    $currentUserId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
     $ownerId = (int)($workspaceAccess['user_id'] ?? 0);
-    if ($currentUserId <= 0) {
-        renderPublicWorkspaceLoginRequiredPage($workspaceAccess);
-    }
-
-    if (!empty($allowedUserIds) && $currentUserId !== $ownerId && !in_array($currentUserId, $allowedUserIds, true)) {
+    if (!empty($allowedUserIds) && $viewerUserId !== $ownerId && !in_array($viewerUserId, $allowedUserIds, true)) {
         renderPublicWorkspaceAccessDeniedPage($workspaceAccess);
     }
 
     return true;
+}
+
+function getPublicWorkspacePasswordProof(array $workspaceAccess): string {
+    return hash('sha256', (string)($workspaceAccess['password'] ?? ''));
 }
 
 function enforcePublicWorkspacePassword(array $workspaceAccess, bool $passedUserRestriction): void {
@@ -556,7 +570,7 @@ function enforcePublicWorkspacePassword(array $workspaceAccess, bool $passedUser
     if (isset($_POST['workspace_password'])) {
         $submittedPassword = (string)$_POST['workspace_password'];
         if (password_verify($submittedPassword, $storedPassword)) {
-            $_SESSION[$sessionKey] = true;
+            $_SESSION[$sessionKey] = getPublicWorkspacePasswordProof($workspaceAccess);
             if ($workspaceName !== '') {
                 header('Location: ' . buildExplicitPublicWorkspaceUrl($workspaceName));
                 exit;
@@ -566,16 +580,21 @@ function enforcePublicWorkspacePassword(array $workspaceAccess, bool $passedUser
         }
     }
 
-    if (empty($_SESSION[$sessionKey])) {
+    $passwordProof = $_SESSION[$sessionKey] ?? null;
+    if (!is_string($passwordProof) || !hash_equals(getPublicWorkspacePasswordProof($workspaceAccess), $passwordProof)) {
         renderPublicWorkspacePasswordPage($workspaceAccess, $passwordError);
     }
 }
 
-function activatePublicWorkspaceAccess(array $workspaceAccess): void {
+function activatePublicWorkspaceAccess(array $workspaceAccess, int $viewerUserId = 0): void {
     $userId = (int)($workspaceAccess['user_id'] ?? 0);
     $workspaceName = trim((string)($workspaceAccess['workspace_name'] ?? ''));
     if ($userId <= 0 || $workspaceName === '') {
         return;
+    }
+
+    if ($viewerUserId <= 0 && isRealUserAuthenticated()) {
+        $viewerUserId = isset($_SESSION['user_id']) ? max(0, (int)$_SESSION['user_id']) : 0;
     }
 
     $_SESSION['authenticated'] = true;
@@ -592,18 +611,32 @@ function activatePublicWorkspaceAccess(array $workspaceAccess): void {
         'workspace_name' => $workspaceName,
         'target_id' => (int)($workspaceAccess['target_id'] ?? 0),
         'registry_key' => (string)($workspaceAccess['registry_key'] ?? ''),
-        'theme' => normalizePublicWorkspaceTheme($workspaceAccess['theme'] ?? null),
+        'viewer_user_id' => max(0, $viewerUserId),
         'activated_at' => time(),
     ];
 }
 
 function maybeAuthenticatePublicWorkspaceRequest(): bool {
-    if (isPublicWorkspaceAccessActive()) {
+    $activeAccess = getPublicWorkspaceAccess();
+    $explicitPublicWorkspaceRequest = isExplicitPublicWorkspaceRequest();
+
+    if ($activeAccess !== null && !$explicitPublicWorkspaceRequest) {
+        $workspaceAccess = resolvePublicWorkspaceAccess((string)$activeAccess['workspace_name']);
+        if ($workspaceAccess === null) {
+            clearPublicWorkspaceAuthentication();
+            return false;
+        }
+
+        $viewerUserId = max(0, (int)($activeAccess['viewer_user_id'] ?? 0));
+        $passedUserRestriction = authorizePublicWorkspaceRequest($workspaceAccess, $viewerUserId);
+        enforcePublicWorkspacePassword($workspaceAccess, $passedUserRestriction);
+
+        activatePublicWorkspaceAccess($workspaceAccess, $viewerUserId);
         return true;
     }
 
     $alreadyAuthenticated = isAuthenticated();
-    if ($alreadyAuthenticated && !isExplicitPublicWorkspaceRequest()) {
+    if ($alreadyAuthenticated && !$explicitPublicWorkspaceRequest) {
         return false;
     }
 
@@ -614,13 +647,17 @@ function maybeAuthenticatePublicWorkspaceRequest(): bool {
 
     $workspaceAccess = resolvePublicWorkspaceAccess($workspaceName);
     if ($workspaceAccess === null) {
+        if ($activeAccess !== null) {
+            clearPublicWorkspaceAuthentication();
+        }
         return false;
     }
 
-    $passedUserRestriction = authorizePublicWorkspaceRequest($workspaceAccess);
+    $viewerUserId = getPublicWorkspaceViewerUserId();
+    $passedUserRestriction = authorizePublicWorkspaceRequest($workspaceAccess, $viewerUserId);
     enforcePublicWorkspacePassword($workspaceAccess, $passedUserRestriction);
 
-    activatePublicWorkspaceAccess($workspaceAccess);
+    activatePublicWorkspaceAccess($workspaceAccess, $viewerUserId);
     return true;
 }
 

@@ -214,7 +214,8 @@ html[data-theme="dark"] .hljs-deletion {
 
 /* Language badge for code blocks */
 pre[data-language]::before,
-pre:has(code[data-language])::before {
+pre:has(code[data-language])::before,
+pre.code-block:not([data-language])::before {
     content: attr(data-language);
     position: absolute;
     top: 0;
@@ -236,14 +237,20 @@ pre:has(code[data-language="normal"])::before {
     content: "CODE";
 }
 
+pre.code-block:not([data-language])::before {
+    content: "CODE";
+}
+
 pre[data-language],
-pre:has(code[data-language]) {
+pre:has(code[data-language]),
+pre.code-block:not([data-language]) {
     position: relative;
     padding-top: 28px;
 }
 
 html[data-theme="dark"] pre[data-language]::before,
-html[data-theme="dark"] pre:has(code[data-language])::before {
+html[data-theme="dark"] pre:has(code[data-language])::before,
+html[data-theme="dark"] pre.code-block:not([data-language])::before {
     color: #c9d1d9;
     background: rgba(255, 255, 255, 0.12);
 }

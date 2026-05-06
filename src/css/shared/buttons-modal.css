@@ -142,10 +142,10 @@ body.shared-page .shared-edit-token-modal .shared-edit-token-modal-title-link {
 }
 
 body.shared-page .shared-edit-token-modal .shared-edit-token-modal-content {
-    max-width: 920px;
-    width: min(920px, 100%);
-    max-width: calc(100vw - 32px);
-    max-height: min(820px, calc(100vh - 32px));
+    width: fit-content;
+    min-width: min(720px, calc(100vw - 32px));
+    max-width: min(760px, calc(100vw - 32px));
+    max-height: min(850px, calc(100vh - 32px));
     display: flex;
     flex-direction: column;
     overflow-y: auto;

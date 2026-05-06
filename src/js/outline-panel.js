@@ -289,6 +289,20 @@ function getHeadingTextContent(heading) {
     return (clone.textContent || '').trim();
 }
 
+function cleanupStaleHeadingAnchorLinks(element) {
+    if (!element) return;
+
+    var anchors = element.querySelectorAll(HEADING_ANCHOR_SELECTOR);
+    for (var i = 0; i < anchors.length; i++) {
+        var anchor = anchors[i];
+        var heading = anchor.closest('h1, h2, h3, h4, h5, h6');
+
+        if (!heading || !getHeadingTextContent(heading)) {
+            anchor.remove();
+        }
+    }
+}
+
 function initHeadingAnchorInteractions() {
     if (hasInitializedHeadingAnchorHandlers) {
         return;
@@ -359,6 +373,8 @@ function addHeadingAnchorLink(heading) {
  */
 function extractHeadings(noteElement) {
     if (!noteElement) return [];
+
+    cleanupStaleHeadingAnchorLinks(noteElement);
 
     const headings = [];
 

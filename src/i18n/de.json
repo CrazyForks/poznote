@@ -32,7 +32,7 @@
       "oidc_button": "Mit {{provider}} fortfahren",
       "documentation": "Poznote Dokumentation",
       "redirecting": "Weiterleitung...",
-        "admin_warning": "Bitte melden Sie sich mit dem Benutzernamen <code>{{username}}</code> und dem aktuellen Passwort dieses Kontos an. Sie können dieses Konto dann in den Einstellungen für mehr Sicherheit umbenennen.",
+      "admin_warning": "Bitte melden Sie sich mit dem Benutzernamen <code>{{username}}</code> und dem aktuellen Passwort dieses Kontos an. Sie können dieses Konto dann in den Einstellungen für mehr Sicherheit umbenennen.",
       "errors": {
         "invalid_credentials": "Benutzername oder Passwort ist falsch."
       }
@@ -496,22 +496,35 @@
       "actions": {
         "enable": "Teilen",
         "edit": "Freigabe bearbeiten",
-        "copy_link": "Freigabelink kopieren",
+        "copy_link": "Link kopieren",
         "disable": "Freigabe aufheben"
       },
       "confirm": {
-        "title": "Arbeitsbereich teilen",
-        "message": "Jede Person mit der URL des Arbeitsbereichs \"{{workspace}}\" hat Zugriff auf alle Notizen und Ordner in diesem Arbeitsbereich.\n\nEs sind keine Änderungen möglich. Der Inhalt kann nur angesehen werden.",
-        "confirm_button": "Arbeitsbereich teilen"
+        "title": "Arbeitsbereich schreibgeschützt teilen",
+        "message": "Jede Person mit der URL des Arbeitsbereichs \"{{workspace}}\" hat Zugriff auf alle Notizen und Ordner in diesem Arbeitsbereich im schreibgeschützten Modus.",
+        "confirm_button": "Arbeitsbereich schreibgeschützt teilen"
       },
       "messages": {
+        "enabled": "Schreibgeschützter Arbeitsbereichslink aktiviert",
+        "disabled": "Schreibgeschützter Arbeitsbereichslink deaktiviert",
         "url_copied": "Freigabelink in die Zwischenablage kopiert!"
       },
       "errors": {
-        "copy_failed": "Freigabelink konnte nicht kopiert werden"
+        "url_in_use": "Ein öffentlicher Arbeitsbereich mit diesem Namen existiert bereits in dieser Poznote-Instanz",
+        "copy_failed": "Freigabelink konnte nicht kopiert werden",
+        "save_failed": "Schreibgeschützter Arbeitsbereichslink konnte nicht gespeichert werden",
+        "disable_failed": "Schreibgeschützter Arbeitsbereichslink konnte nicht deaktiviert werden"
       },
+      "status": {
+        "enabled": "Öffentlicher schreibgeschützter Zugriff aktiviert",
+        "disabled": "Nicht öffentlich geteilt"
+      },
+      "help": "Jede Person mit dieser URL öffnet Poznote direkt in diesem Arbeitsbereich im schreibgeschützten Modus.",
       "options": {
-        "require_login": "Poznote-Anmeldung erforderlich"
+        "require_login": "Poznote-Anmeldung erforderlich",
+        "restrict_users": "Auf bestimmte Benutzer beschränken",
+        "users_loading": "Benutzer werden geladen...",
+        "no_users_found": "Keine anderen Benutzer gefunden"
       }
     }
   },
@@ -1431,7 +1444,7 @@
     "redirecting": "Weiterleitung...",
     "show_password": "Passwort anzeigen",
     "hide_password": "Passwort ausblenden",
-      "admin_warning": "Bitte melden Sie sich mit dem Benutzernamen <code>{{username}}</code> und dem aktuellen Passwort dieses Kontos an und benennen Sie dieses Konto in den Einstellungen für mehr Sicherheit um.",
+    "admin_warning": "Bitte melden Sie sich mit dem Benutzernamen <code>{{username}}</code> und dem aktuellen Passwort dieses Kontos an und benennen Sie dieses Konto in den Einstellungen für mehr Sicherheit um.",
     "fields": {
       "username": "Benutzername",
       "username_or_email": "Benutzername oder E-Mail",
@@ -1744,7 +1757,7 @@
     "no_shared_folders": "Noch keine geteilten Ordner.",
     "no_shares": "Noch keine Freigaben.",
     "no_shares_hint": "Teilen Sie eine Notiz oder einen Ordner, indem Sie auf die Cloud-Schaltfläche in der Symbolleiste klicken.",
-    "restrict_users": "Auf bestimmte Benutzer beschränken",
+    "restrict_users": "Auf Benutzer beschränken",
     "restrict_users_mobile": "Beschränken",
     "restrict_users_placeholder": "Benutzer auswählen...",
     "restricted_badge": "Eingeschränkt",

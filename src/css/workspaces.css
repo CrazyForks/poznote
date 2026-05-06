@@ -205,7 +205,9 @@ body {
 }
 
 .shared-edit-token-modal .shared-edit-token-modal-content {
-    width: min(650px, calc(100vw - 32px));
+    width: fit-content;
+    min-width: min(620px, calc(100vw - 32px));
+    max-width: min(660px, calc(100vw - 32px));
     max-height: calc(100vh - 48px);
     overflow-y: auto;
 }
@@ -280,7 +282,6 @@ body {
 
 .shared-edit-token-modal .indexable-label-text {
     color: #374151;
-    font-weight: 600;
 }
 
 .shared-edit-token-modal .share-user-list-container {
@@ -322,9 +323,13 @@ body {
 .shared-edit-token-modal .shared-edit-token-modal-actions {
     display: flex;
     justify-content: flex-end;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 10px;
     margin-top: 18px;
+}
+
+.shared-edit-token-modal .shared-edit-token-modal-actions .btn {
+    white-space: nowrap;
 }
 
 html[data-theme='dark'] .shared-edit-token-modal .shared-edit-token-modal-content,
