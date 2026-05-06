@@ -10,6 +10,7 @@ ob_start();
 require_once 'functions.php';
 require_once 'config.php';
 require_once 'db_connect.php';
+require_once 'share_passwords.php';
 
 $pageWorkspace = trim(getWorkspaceFilter());
 $currentLang = getUserLanguage();
@@ -83,6 +84,7 @@ foreach ($allFolders as $fid => $f) {
 			'created'         => $entry['created'],
 			'indexable'       => $entry['indexable'],
 			'password'        => !empty($entry['password']),
+			'passwordValue'   => poznoteDecryptSharePassword($entry['password_encrypted'] ?? ''),
 			'allowed_users'   => !empty($entry['allowed_users']) ? json_decode($entry['allowed_users'], true) : null,
 			'folder_name'     => $f['name'],
 			'note_count'      => (int)$noteCount,

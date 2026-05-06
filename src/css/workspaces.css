@@ -240,11 +240,30 @@ body {
 }
 
 .shared-edit-token-modal .modal-password-input {
+    flex: 1 1 auto;
+    min-width: 0;
     min-height: 40px;
     padding: 8px 10px;
     border: 1px solid #d1d5db;
     border-radius: 6px;
     font-size: 14px;
+}
+
+.shared-edit-token-modal .shared-edit-token-password-toggle {
+    flex: 0 0 42px;
+    width: 42px;
+    min-width: 42px;
+    height: 40px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.shared-edit-token-modal .shared-edit-token-password-toggle i,
+.shared-edit-token-modal .shared-edit-token-password-toggle svg {
+    width: 18px;
+    height: 18px;
 }
 
 .shared-edit-token-modal .share-indexable-wrap,
@@ -351,6 +370,19 @@ body.dark-mode .shared-edit-token-modal .modal-password-input:focus {
     outline: none;
     border-color: #66b3ff;
     box-shadow: 0 0 0 2px rgba(102, 179, 255, 0.18);
+}
+
+html[data-theme='dark'] .shared-edit-token-modal .shared-edit-token-password-toggle,
+body.dark-mode .shared-edit-token-modal .shared-edit-token-password-toggle {
+    background: #454b52;
+    border-color: #5b636d;
+    color: #f5f7fa;
+}
+
+html[data-theme='dark'] .shared-edit-token-modal .shared-edit-token-password-toggle:hover,
+body.dark-mode .shared-edit-token-modal .shared-edit-token-password-toggle:hover {
+    background: #535b64;
+    color: #ffffff;
 }
 
 html[data-theme='dark'] .shared-edit-token-modal .share-indexable-wrap,

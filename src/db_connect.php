@@ -208,6 +208,7 @@ try {
         created DATETIME DEFAULT CURRENT_TIMESTAMP,
         expires DATETIME,
         access_mode TEXT DEFAULT "full",
+        password_encrypted TEXT,
         FOREIGN KEY(note_id) REFERENCES entries(id) ON DELETE CASCADE
     )');
 
@@ -221,6 +222,7 @@ try {
         theme TEXT,
         indexable INTEGER DEFAULT 0,
         password TEXT,
+        password_encrypted TEXT,
         FOREIGN KEY(folder_id) REFERENCES folders(id) ON DELETE CASCADE
     )');
 
@@ -231,6 +233,7 @@ try {
         token TEXT UNIQUE NOT NULL,
         theme TEXT,
         password TEXT,
+        password_encrypted TEXT,
         login_required INTEGER DEFAULT 0,
         allowed_users TEXT,
         created DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -250,7 +253,7 @@ try {
     )');
 
     // --- Schema versioning: skip migrations & indexes if already up to date ---
-    $CURRENT_SCHEMA_VERSION = 10;
+    $CURRENT_SCHEMA_VERSION = 11;
     $currentVersion = 0;
     try {
         $svStmt = $con->query("SELECT value FROM settings WHERE key = 'schema_version'");
@@ -316,6 +319,9 @@ try {
             if (!in_array('password', $existingColumns)) {
                 $con->exec("ALTER TABLE shared_notes ADD COLUMN password TEXT");
             }
+            if (!in_array('password_encrypted', $existingColumns)) {
+                $con->exec("ALTER TABLE shared_notes ADD COLUMN password_encrypted TEXT");
+            }
             if (!in_array('access_mode', $existingColumns)) {
                 $con->exec("ALTER TABLE shared_notes ADD COLUMN access_mode TEXT DEFAULT 'full'");
             }
@@ -333,6 +339,9 @@ try {
             if (!in_array('allowed_users', $existingColumns)) {
                 $con->exec("ALTER TABLE shared_folders ADD COLUMN allowed_users TEXT");
             }
+            if (!in_array('password_encrypted', $existingColumns)) {
+                $con->exec("ALTER TABLE shared_folders ADD COLUMN password_encrypted TEXT");
+            }
         } catch (Exception $e) {
             error_log('Could not add missing columns to shared_folders: ' . $e->getMessage());
         }
@@ -343,6 +352,9 @@ try {
             $existingColumns = array_column($cols, 'name');
             if (!in_array('password', $existingColumns)) {
                 $con->exec("ALTER TABLE shared_workspaces ADD COLUMN password TEXT");
+            }
+            if (!in_array('password_encrypted', $existingColumns)) {
+                $con->exec("ALTER TABLE shared_workspaces ADD COLUMN password_encrypted TEXT");
             }
             if (!in_array('theme', $existingColumns)) {
                 $con->exec("ALTER TABLE shared_workspaces ADD COLUMN theme TEXT");
@@ -426,7 +438,7 @@ try {
         $con->exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('markdown_split_card_view', '1')");
 
         // === Update schema version ===
-        $con->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '10')");
+        $con->exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '11')");
     }
     // --- End schema versioning ---
 
