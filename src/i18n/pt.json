@@ -32,7 +32,7 @@
       "oidc_button": "Continuar com {{provider}}",
       "documentation": "Documentação do Poznote",
       "redirecting": "Redirecionando...",
-        "admin_warning": "Inicie sessão com o nome de usuário <code>{{username}}</code> e a senha atual desta conta. Você poderá renomear esta conta nas configurações para maior segurança.",
+      "admin_warning": "Inicie sessão com o nome de usuário <code>{{username}}</code> e a senha atual desta conta. Você poderá renomear esta conta nas configurações para maior segurança.",
       "errors": {
         "invalid_credentials": "Usuário ou senha incorretos."
       }
@@ -495,13 +495,13 @@
       "actions": {
         "enable": "Compartilhar",
         "edit": "Editar partilha",
-        "copy_link": "Copiar link de partilha",
+        "copy_link": "Copiar link",
         "disable": "Deixar de compartilhar"
       },
       "confirm": {
-        "title": "Compartilhar espaço de trabalho",
-        "message": "Qualquer pessoa com a URL do espaço de trabalho \"{{workspace}}\" terá acesso a todas as notas e pastas deste espaço de trabalho.\n\nEla não poderá modificar nada. Só poderá consultar o conteúdo.",
-        "confirm_button": "Compartilhar espaço de trabalho"
+        "title": "Compartilhar espaço de trabalho em modo somente leitura",
+        "message": "Qualquer pessoa com a URL do espaço de trabalho \"{{workspace}}\" terá acesso a todas as notas e pastas deste espaço de trabalho em modo somente leitura.",
+        "confirm_button": "Compartilhar espaço de trabalho em modo somente leitura"
       },
       "messages": {
         "url_copied": "Link de partilha copiado para a área de transferência!"
@@ -1436,7 +1436,7 @@
     "redirecting": "Redirecionando...",
     "show_password": "Mostrar senha",
     "hide_password": "Ocultar senha",
-      "admin_warning": "Inicie sessão com o nome de usuário <code>{{username}}</code> e a senha atual desta conta. Você poderá renomear esta conta nas configurações para maior segurança.",
+    "admin_warning": "Inicie sessão com o nome de usuário <code>{{username}}</code> e a senha atual desta conta. Você poderá renomear esta conta nas configurações para maior segurança.",
     "fields": {
       "username": "Nome de usuário",
       "username_or_email": "Nome de usuário ou e-mail",
@@ -1749,7 +1749,7 @@
     "no_shared_folders": "Ainda não há pastas compartilhadas.",
     "no_shares": "Nenhum compartilhamento ainda.",
     "no_shares_hint": "Compartilhe uma nota ou pasta clicando no botão de nuvem na barra de ferramentas.",
-    "restrict_users": "Restringir a utilizadores específicos",
+    "restrict_users": "Restringir a utilizadores",
     "restrict_users_mobile": "Restringir",
     "restrict_users_placeholder": "Selecionar utilizadores...",
     "restricted_badge": "Restrito",

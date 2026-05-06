@@ -507,13 +507,13 @@
       "actions": {
         "enable": "Partager",
         "edit": "Editer le partage",
-        "copy_link": "Copier le lien du partage",
+        "copy_link": "Copier le lien",
         "disable": "Ne plus partager"
       },
       "confirm": {
-        "title": "Partager l’espace de travail",
-        "message": "Toute personne disposant de l’URL de l’espace de travail \"{{workspace}}\" aura accès à toutes les notes et tous les dossiers de cet espace de travail.\n\nElle ne pourra rien modifier. Elle pourra uniquement consulter le contenu.",
-        "confirm_button": "Partager l’espace de travail"
+        "title": "Partager l’espace de travail en lecture seule",
+        "message": "Toute personne disposant de l'URL de l'espace de travail \"{{workspace}}\" aura accès à toutes les notes et tous les dossiers de cet espace de travail en lecture seule.",
+        "confirm_button": "Partager l’espace de travail en lecture seule"
       },
       "messages": {
         "url_copied": "Lien de partage copié dans le presse-papiers !"
@@ -1479,7 +1479,7 @@
     "redirecting": "Redirection...",
     "show_password": "Afficher le mot de passe",
     "hide_password": "Masquer le mot de passe",
-      "admin_warning": "Veuillez vous connecter avec le pseudo <code>{{username}}</code> et le mot de passe actuel de ce compte. Vous pourrez ensuite renommer ce compte dans les réglages pour plus de sécurité.",
+    "admin_warning": "Veuillez vous connecter avec le pseudo <code>{{username}}</code> et le mot de passe actuel de ce compte. Vous pourrez ensuite renommer ce compte dans les réglages pour plus de sécurité.",
     "fields": {
       "username": "Nom d’utilisateur",
       "username_or_email": "Pseudo ou Email",
@@ -1792,7 +1792,7 @@
     "no_shared_folders": "Aucun dossier partagé pour le moment.",
     "no_shares": "Aucun partage pour le moment.",
     "no_shares_hint": "Partagez une note ou un dossier en cliquant sur le bouton de nuage dans la barre d'outils.",
-    "restrict_users": "Restreindre à des utilisateurs spécifiques",
+    "restrict_users": "Restreindre à des utilisateurs",
     "restrict_users_mobile": "Restreindre",
     "restrict_users_placeholder": "Sélectionner des utilisateurs...",
     "restricted_badge": "Restreint",

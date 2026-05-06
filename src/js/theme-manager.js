@@ -147,6 +147,16 @@
                 icon.className = 'lucide lucide-monitor';
             }
         }
+
+        var publicWorkspaceToggle = document.getElementById('publicWorkspaceThemeToggle');
+        if (publicWorkspaceToggle) {
+            var appliedTheme = mode === 'system' ? getSystemTheme() : mode;
+            appliedTheme = appliedTheme === 'dark' ? 'dark' : 'light';
+            var publicIcon = publicWorkspaceToggle.querySelector('i');
+            if (publicIcon) {
+                publicIcon.className = appliedTheme === 'dark' ? 'lucide lucide-sun' : 'lucide lucide-moon';
+            }
+        }
     }
 
     // When client-side i18n finishes loading, re-render the badge label
@@ -170,6 +180,17 @@
     };
     window.getCurrentThemeMode = getCurrentThemeMode;
     window.applyTheme = applyTheme;
+
+    document.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!target || typeof target.closest !== 'function') return;
+
+        var publicWorkspaceToggle = target.closest('#publicWorkspaceThemeToggle');
+        if (!publicWorkspaceToggle) return;
+
+        event.preventDefault();
+        toggleTheme();
+    });
 
     // Initialize theme when DOM is ready
     if (document.readyState === 'loading') {

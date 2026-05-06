@@ -26,17 +26,6 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQ
     $isAjax = true;
 }
 
-if (!function_exists('sanitizeWorkspaceShareTheme')) {
-    function sanitizeWorkspaceShareTheme($rawValue): ?string {
-        if (function_exists('normalizePublicWorkspaceTheme')) {
-            return normalizePublicWorkspaceTheme($rawValue);
-        }
-
-        $theme = strtolower(trim((string)$rawValue));
-        return in_array($theme, ['dark', 'light'], true) ? $theme : null;
-    }
-}
-
 // Handle create/delete actions
 if ($_POST) {
     try {
@@ -522,21 +511,13 @@ if ($_POST) {
 
             require_once __DIR__ . '/users/db_master.php';
 
-            $shareStmt = $con->prepare('SELECT id, token, theme, password, password_encrypted, login_required, allowed_users FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
+            $shareStmt = $con->prepare('SELECT id, token, password, password_encrypted, login_required, allowed_users FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
             $shareStmt->execute([$name]);
             $existingShare = $shareStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
             $shareId = $existingShare ? (int)$existingShare['id'] : 0;
             $oldToken = $existingShare['token'] ?? null;
             $token = buildWorkspaceShareRegistryKey($name);
-
-            $themeProvided = array_key_exists('theme', $_POST);
-            $shareTheme = $themeProvided
-                ? sanitizeWorkspaceShareTheme($_POST['theme'] ?? '')
-                : sanitizeWorkspaceShareTheme($existingShare['theme'] ?? null);
-            if ($shareTheme === null && $existingShare) {
-                $shareTheme = sanitizeWorkspaceShareTheme($existingShare['theme'] ?? null);
-            }
 
             $passwordProvided = array_key_exists('password', $_POST);
             $password = $passwordProvided ? trim((string)($_POST['password'] ?? '')) : '';
@@ -567,11 +548,11 @@ if ($_POST) {
             }
 
             if ($existingShare) {
-                $updateShare = $con->prepare('UPDATE shared_workspaces SET token = ?, theme = ?, password = ?, password_encrypted = ?, login_required = ?, allowed_users = ?, created = CURRENT_TIMESTAMP WHERE workspace_name = ?');
-                $updateShare->execute([$token, $shareTheme, $hashedPassword, $encryptedPassword, $loginRequired ? 1 : 0, $allowedUsersJson, $name]);
+                $updateShare = $con->prepare('UPDATE shared_workspaces SET token = ?, theme = NULL, password = ?, password_encrypted = ?, login_required = ?, allowed_users = ?, created = CURRENT_TIMESTAMP WHERE workspace_name = ?');
+                $updateShare->execute([$token, $hashedPassword, $encryptedPassword, $loginRequired ? 1 : 0, $allowedUsersJson, $name]);
             } else {
-                $insertShare = $con->prepare('INSERT INTO shared_workspaces (workspace_name, token, theme, password, password_encrypted, login_required, allowed_users) VALUES (?, ?, ?, ?, ?, ?, ?)');
-                $insertShare->execute([$name, $token, $shareTheme, $hashedPassword, $encryptedPassword, $loginRequired ? 1 : 0, $allowedUsersJson]);
+                $insertShare = $con->prepare('INSERT INTO shared_workspaces (workspace_name, token, password, password_encrypted, login_required, allowed_users) VALUES (?, ?, ?, ?, ?, ?)');
+                $insertShare->execute([$name, $token, $hashedPassword, $encryptedPassword, $loginRequired ? 1 : 0, $allowedUsersJson]);
 
                 $shareLookup = $con->prepare('SELECT id FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
                 $shareLookup->execute([$name]);
@@ -594,7 +575,6 @@ if ($_POST) {
                     'success' => true,
                     'public' => true,
                     'url' => $publicUrl,
-                    'theme' => $shareTheme,
                     'hasPassword' => !empty($hashedPassword),
                     'passwordValue' => poznoteDecryptSharePassword($encryptedPassword),
                     'loginRequired' => $loginRequired,
@@ -664,7 +644,7 @@ if (!function_exists('buildWorkspaceShareRegistryKey')) {
 // Read existing workspaces and share state
 $workspaces = [];
 $workspaceRows = [];
-$stmt = $con->query('SELECT w.name, sw.token AS readonly_token, sw.theme AS readonly_theme, sw.password AS readonly_password, sw.password_encrypted AS readonly_password_encrypted, sw.login_required AS readonly_login_required, sw.allowed_users AS readonly_allowed_users FROM workspaces w LEFT JOIN shared_workspaces sw ON sw.workspace_name = w.name ORDER BY w.name');
+$stmt = $con->query('SELECT w.name, sw.token AS readonly_token, sw.password AS readonly_password, sw.password_encrypted AS readonly_password_encrypted, sw.login_required AS readonly_login_required, sw.allowed_users AS readonly_allowed_users FROM workspaces w LEFT JOIN shared_workspaces sw ON sw.workspace_name = w.name ORDER BY w.name');
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $workspaceName = $row['name'];
     $readonlyToken = $row['readonly_token'] ?? '';
@@ -672,7 +652,6 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $workspaceRows[] = [
         'name' => $workspaceName,
         'readonly_token' => $readonlyToken,
-        'readonly_theme' => sanitizeWorkspaceShareTheme($row['readonly_theme'] ?? null),
         'readonly_url' => $readonlyToken !== '' ? buildWorkspaceSharePublicUrl($workspaceName) : '',
         'readonly_has_password' => !empty($row['readonly_password']),
         'readonly_password_value' => poznoteDecryptSharePassword($row['readonly_password_encrypted'] ?? ''),
@@ -840,7 +819,6 @@ try {
                                             data-password-value="<?php echo htmlspecialchars((string)($workspaceRow['readonly_password_value'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                             data-login-required="<?php echo !empty($workspaceRow['readonly_login_required']) ? '1' : '0'; ?>"
                                             data-allowed-users="<?php echo htmlspecialchars(json_encode($workspaceRow['readonly_allowed_users'] ?? [], JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP), ENT_QUOTES, 'UTF-8'); ?>"
-                                            data-theme="<?php echo htmlspecialchars((string)($workspaceRow['readonly_theme'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                             data-action="upsert_readonly_share">
                                         <?php echo $workspaceReadonlyEnabled
                                             ? t_h('workspaces.share.actions.edit', [], 'Edit share', $currentLang)

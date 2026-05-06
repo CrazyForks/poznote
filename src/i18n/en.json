@@ -448,13 +448,13 @@
         "actions": {
           "enable": "Share",
           "edit": "Edit share",
-          "copy_link": "Copy share link",
+          "copy_link": "Copy link",
           "disable": "Unshare"
         },
         "confirm": {
-          "title": "Share workspace",
-          "message": "Anyone with the URL for workspace \"{{workspace}}\" will have access to all notes and folders in this workspace.\n\nThey will not be able to modify anything. They will only be able to view the content.",
-          "confirm_button": "Share workspace"
+          "title": "Share workspace in read-only mode",
+          "message": "Anyone with the URL for workspace \"{{workspace}}\" will have access to all notes and folders in this workspace in read-only mode.",
+          "confirm_button": "Share workspace in read-only mode"
         },
         "messages": {
           "url_copied": "Share link copied to clipboard!"
@@ -1071,7 +1071,7 @@
     "redirecting": "Redirecting...",
     "show_password": "Show password",
     "hide_password": "Hide password",
-      "admin_warning": "Please log in with the username <code>{{username}}</code> and the current password for this account. You can then rename this account in settings for better security.",
+    "admin_warning": "Please log in with the username <code>{{username}}</code> and the current password for this account. You can then rename this account in settings for better security.",
     "fields": {
       "username": "Username",
       "username_or_email": "Username or Email",
@@ -1384,7 +1384,7 @@
     "no_shared_folders": "No shared folders yet.",
     "no_shares": "No shares yet.",
     "no_shares_hint": "Share a note or folder by clicking the cloud button in the toolbar.",
-    "restrict_users": "Restrict to specific users",
+    "restrict_users": "Restrict to users",
     "restrict_users_mobile": "Restrict",
     "restrict_users_placeholder": "Select users...",
     "restricted_badge": "Restricted",

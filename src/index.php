@@ -148,7 +148,7 @@ if ($width_value !== false && $width_value !== '' && $width_value !== '0' && $wi
     }
 }
 
-$forcedPublicWorkspaceTheme = function_exists('getPublicWorkspaceTheme') ? getPublicWorkspaceTheme() : null;
+$isPublicWorkspaceReadonly = function_exists('isPublicWorkspaceAccessActive') && isPublicWorkspaceAccessActive();
 
 ?>
 
@@ -172,9 +172,6 @@ $forcedPublicWorkspaceTheme = function_exists('getPublicWorkspaceTheme') ? getPu
     <link rel="manifest" href="pwa/manifest.webmanifest?v=<?php echo $v; ?>">
     <link rel="icon" href="favicon.ico" sizes="512x512" type="image/png">
     <link rel="apple-touch-icon" href="pwa/poznote.png?v=<?php echo $v; ?>">
-    <?php if ($forcedPublicWorkspaceTheme !== null): ?>
-    <script>window.__poznoteForcedTheme = <?php echo json_encode($forcedPublicWorkspaceTheme, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;</script>
-    <?php endif; ?>
     <script src="js/theme-init.js?v=<?php echo $v; ?>"></script>
     <script>
         (function () {
@@ -335,7 +332,6 @@ if ($pref && isset($allowed_sorts[$pref])) {
 
 // Set body classes
 $body_classes = trim($extra_body_classes);
-$isPublicWorkspaceReadonly = function_exists('isPublicWorkspaceAccessActive') && isPublicWorkspaceAccessActive();
 if ($isPublicWorkspaceReadonly) {
     $body_classes = trim($body_classes . ' public-workspace-readonly');
 }
@@ -400,6 +396,10 @@ if ($isPublicWorkspaceReadonly) {
                     </button>
                     <button class="sidebar-plus" data-action="toggle-create-menu" title="<?php echo t_h('sidebar.create'); ?>">
                         <i class="lucide lucide-plus-circle"></i>
+                    </button>
+                <?php else: ?>
+                    <button type="button" id="publicWorkspaceThemeToggle" class="sidebar-plus public-workspace-theme-toggle" title="<?php echo t_h('theme.toggle', [], 'Toggle theme'); ?>" aria-label="<?php echo t_h('theme.toggle', [], 'Toggle theme'); ?>">
+                        <i class="lucide lucide-moon"></i>
                     </button>
                 <?php endif; ?>
             </div>
