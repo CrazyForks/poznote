@@ -5,6 +5,7 @@ requireAuth();
 require_once 'config.php';
 require_once 'db_connect.php';
 require_once 'functions.php';
+require_once 'share_passwords.php';
 requireSettingsPassword();
 
 $currentLang = getUserLanguage();
@@ -521,7 +522,7 @@ if ($_POST) {
 
             require_once __DIR__ . '/users/db_master.php';
 
-            $shareStmt = $con->prepare('SELECT id, token, theme, password, login_required, allowed_users FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
+            $shareStmt = $con->prepare('SELECT id, token, theme, password, password_encrypted, login_required, allowed_users FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
             $shareStmt->execute([$name]);
             $existingShare = $shareStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
@@ -542,6 +543,9 @@ if ($_POST) {
             $hashedPassword = $passwordProvided
                 ? ($password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null)
                 : ($existingShare['password'] ?? null);
+            $encryptedPassword = $passwordProvided
+                ? poznoteEncryptSharePassword($password)
+                : ($existingShare['password_encrypted'] ?? null);
 
             $accessOptionsProvided = array_key_exists('login_required', $_POST) || array_key_exists('allowed_users', $_POST);
             if ($accessOptionsProvided) {
@@ -563,11 +567,11 @@ if ($_POST) {
             }
 
             if ($existingShare) {
-                $updateShare = $con->prepare('UPDATE shared_workspaces SET token = ?, theme = ?, password = ?, login_required = ?, allowed_users = ?, created = CURRENT_TIMESTAMP WHERE workspace_name = ?');
-                $updateShare->execute([$token, $shareTheme, $hashedPassword, $loginRequired ? 1 : 0, $allowedUsersJson, $name]);
+                $updateShare = $con->prepare('UPDATE shared_workspaces SET token = ?, theme = ?, password = ?, password_encrypted = ?, login_required = ?, allowed_users = ?, created = CURRENT_TIMESTAMP WHERE workspace_name = ?');
+                $updateShare->execute([$token, $shareTheme, $hashedPassword, $encryptedPassword, $loginRequired ? 1 : 0, $allowedUsersJson, $name]);
             } else {
-                $insertShare = $con->prepare('INSERT INTO shared_workspaces (workspace_name, token, theme, password, login_required, allowed_users) VALUES (?, ?, ?, ?, ?, ?)');
-                $insertShare->execute([$name, $token, $shareTheme, $hashedPassword, $loginRequired ? 1 : 0, $allowedUsersJson]);
+                $insertShare = $con->prepare('INSERT INTO shared_workspaces (workspace_name, token, theme, password, password_encrypted, login_required, allowed_users) VALUES (?, ?, ?, ?, ?, ?, ?)');
+                $insertShare->execute([$name, $token, $shareTheme, $hashedPassword, $encryptedPassword, $loginRequired ? 1 : 0, $allowedUsersJson]);
 
                 $shareLookup = $con->prepare('SELECT id FROM shared_workspaces WHERE workspace_name = ? LIMIT 1');
                 $shareLookup->execute([$name]);
@@ -592,6 +596,7 @@ if ($_POST) {
                     'url' => $publicUrl,
                     'theme' => $shareTheme,
                     'hasPassword' => !empty($hashedPassword),
+                    'passwordValue' => poznoteDecryptSharePassword($encryptedPassword),
                     'loginRequired' => $loginRequired,
                     'allowed_users' => !empty($allowedUserIds) ? $allowedUserIds : null,
                     'message' => $message,
@@ -659,7 +664,7 @@ if (!function_exists('buildWorkspaceShareRegistryKey')) {
 // Read existing workspaces and share state
 $workspaces = [];
 $workspaceRows = [];
-$stmt = $con->query('SELECT w.name, sw.token AS readonly_token, sw.theme AS readonly_theme, sw.password AS readonly_password, sw.login_required AS readonly_login_required, sw.allowed_users AS readonly_allowed_users FROM workspaces w LEFT JOIN shared_workspaces sw ON sw.workspace_name = w.name ORDER BY w.name');
+$stmt = $con->query('SELECT w.name, sw.token AS readonly_token, sw.theme AS readonly_theme, sw.password AS readonly_password, sw.password_encrypted AS readonly_password_encrypted, sw.login_required AS readonly_login_required, sw.allowed_users AS readonly_allowed_users FROM workspaces w LEFT JOIN shared_workspaces sw ON sw.workspace_name = w.name ORDER BY w.name');
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $workspaceName = $row['name'];
     $readonlyToken = $row['readonly_token'] ?? '';
@@ -670,6 +675,7 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         'readonly_theme' => sanitizeWorkspaceShareTheme($row['readonly_theme'] ?? null),
         'readonly_url' => $readonlyToken !== '' ? buildWorkspaceSharePublicUrl($workspaceName) : '',
         'readonly_has_password' => !empty($row['readonly_password']),
+        'readonly_password_value' => poznoteDecryptSharePassword($row['readonly_password_encrypted'] ?? ''),
         'readonly_login_required' => !empty($row['readonly_login_required']),
         'readonly_allowed_users' => is_array($readonlyAllowedUsers) ? array_values(array_map('intval', $readonlyAllowedUsers)) : [],
     ];
@@ -742,6 +748,8 @@ try {
     data-txt-workspace-share-help="<?php echo htmlspecialchars(t('workspaces.share.help', [], 'Anyone with this URL opens Poznote directly on this workspace in read-only mode.', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
         data-txt-workspace-share-password-label="<?php echo htmlspecialchars(t('index.public_modal.password', [], 'Password (optional)', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
         data-txt-workspace-share-password-placeholder="<?php echo htmlspecialchars(t('index.public_modal.password_placeholder', [], 'Enter a password', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-show-password="<?php echo htmlspecialchars(t('login.show_password', [], 'Show password', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-hide-password="<?php echo htmlspecialchars(t('login.hide_password', [], 'Hide password', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
         data-txt-workspace-share-require-login="<?php echo htmlspecialchars(t('workspaces.share.options.require_login', [], 'Require Poznote login', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
         data-txt-workspace-share-restrict-users="<?php echo htmlspecialchars(t('public.restrict_users', [], 'Restrict to specific users', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
         data-txt-workspace-share-users-loading="<?php echo htmlspecialchars(t('public.users_loading', [], 'Loading users...', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
@@ -829,6 +837,7 @@ try {
                                             data-shared="<?php echo $workspaceReadonlyEnabled ? '1' : '0'; ?>"
                                             data-url="<?php echo htmlspecialchars((string)($workspaceRow['readonly_url'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                             data-has-password="<?php echo !empty($workspaceRow['readonly_has_password']) ? '1' : '0'; ?>"
+                                            data-password-value="<?php echo htmlspecialchars((string)($workspaceRow['readonly_password_value'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                             data-login-required="<?php echo !empty($workspaceRow['readonly_login_required']) ? '1' : '0'; ?>"
                                             data-allowed-users="<?php echo htmlspecialchars(json_encode($workspaceRow['readonly_allowed_users'] ?? [], JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP), ENT_QUOTES, 'UTF-8'); ?>"
                                             data-theme="<?php echo htmlspecialchars((string)($workspaceRow['readonly_theme'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"

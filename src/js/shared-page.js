@@ -76,10 +76,8 @@
     var filteredItems = [];
     var filterText = '';
     var filterType = 'all';
-    var sharePasswordCache = {};
     var pendingEditorRequest = null;
     var pendingEditorHandled = false;
-    var SHARE_PASSWORD_STORAGE_KEY = 'poznote-share-password-cache';
 
     function isMobileShareModalView() {
         return !!(window.matchMedia && window.matchMedia('(max-width: 680px)').matches);
@@ -115,59 +113,11 @@
         setTimeout(function() { if (toast.parentNode) toast.remove(); }, 5000);
     }
 
-    function loadSharePasswordCache() {
-        try {
-            var rawValue = window.localStorage.getItem(SHARE_PASSWORD_STORAGE_KEY);
-            if (!rawValue) {
-                return {};
-            }
-
-            var parsedValue = JSON.parse(rawValue);
-            return parsedValue && typeof parsedValue === 'object' ? parsedValue : {};
-        } catch (error) {
-            return {};
-        }
-    }
-
-    function persistSharePasswordCache() {
-        try {
-            window.localStorage.setItem(SHARE_PASSWORD_STORAGE_KEY, JSON.stringify(sharePasswordCache));
-        } catch (error) {
-            // Ignore storage errors to avoid blocking the edit flow.
-        }
-    }
-
-    sharePasswordCache = loadSharePasswordCache();
-
-    function getSharePasswordCacheKey(itemType, itemId) {
-        return String(itemType || '') + ':' + String(itemId || '');
-    }
-
-    function getCachedSharePassword(itemType, itemId) {
-        return sharePasswordCache[getSharePasswordCacheKey(itemType, itemId)] || '';
-    }
-
-    function setCachedSharePassword(itemType, itemId, password) {
-        var cacheKey = getSharePasswordCacheKey(itemType, itemId);
-        var nextPassword = password || '';
-
-        if (nextPassword) {
-            sharePasswordCache[cacheKey] = nextPassword;
-        } else {
-            delete sharePasswordCache[cacheKey];
-        }
-
-        persistSharePasswordCache();
-    }
-
     function buildEditModalOptions(item) {
         if (!item) return null;
 
         if (item._type === 'note') {
             var noteHasPassword = !!Number(item.hasPassword);
-            if (!noteHasPassword) {
-                setCachedSharePassword('note', item.note_id, '');
-            }
 
             return {
                 itemId: item.note_id,
@@ -178,7 +128,7 @@
                 accessMode: item.access_mode || 'full',
                 indexable: !!Number(item.indexable),
                 hasPassword: noteHasPassword,
-                passwordValue: noteHasPassword ? getCachedSharePassword('note', item.note_id) : '',
+                passwordValue: item.passwordValue || '',
                 allowedUsers: item.allowed_users || null,
                 onSave: function(updates) {
                     return updateNoteShareSettings(item.note_id, updates);
@@ -188,9 +138,6 @@
 
         if (item._type === 'folder') {
             var folderHasPassword = !!Number(item.password);
-            if (!folderHasPassword) {
-                setCachedSharePassword('folder', item.folder_id, '');
-            }
 
             return {
                 itemId: item.folder_id,
@@ -200,7 +147,7 @@
                 accessMode: item.access_mode || 'full',
                 indexable: !!Number(item.indexable),
                 hasPassword: folderHasPassword,
-                passwordValue: folderHasPassword ? getCachedSharePassword('folder', item.folder_id) : '',
+                passwordValue: item.passwordValue || '',
                 allowedUsers: item.allowed_users || null,
                 onSave: function(updates) {
                     return updateFolderShareSettings(item.folder_id, updates);
@@ -575,7 +522,10 @@
         .then(function(data) {
             if (data.error) throw new Error(data.error);
             var note = sharedNotes.find(function(n) { return n.note_id === noteId; });
-            if (note) note.hasPassword = data.hasPassword ? 1 : 0;
+            if (note) {
+                note.hasPassword = data.hasPassword ? 1 : 0;
+                note.passwordValue = data.passwordValue || '';
+            }
             mergeItems();
             applyFilter();
         })
@@ -628,7 +578,8 @@
                     sharedNotes[idx].access_mode = updates.access_mode;
                 }
                 if (Object.prototype.hasOwnProperty.call(updates, 'password') && updates.password !== undefined) {
-                    sharedNotes[idx].hasPassword = updates.password ? 1 : 0;
+                    sharedNotes[idx].hasPassword = data.hasPassword ? 1 : 0;
+                    sharedNotes[idx].passwordValue = data.passwordValue || '';
                 }
                 if (Object.prototype.hasOwnProperty.call(updates, 'allowed_users') && updates.allowed_users !== undefined) {
                     sharedNotes[idx].allowed_users = updates.allowed_users;
@@ -717,7 +668,8 @@
                     folder.indexable = updates.indexable ? 1 : 0;
                 }
                 if (Object.prototype.hasOwnProperty.call(updates, 'password') && updates.password !== undefined) {
-                    folder.password = updates.password ? 1 : 0;
+                    folder.password = data.hasPassword ? 1 : 0;
+                    folder.passwordValue = data.passwordValue || '';
                 }
                 if (Object.prototype.hasOwnProperty.call(updates, 'allowed_users') && updates.allowed_users !== undefined) {
                     folder.allowed_users = updates.allowed_users;
@@ -962,8 +914,8 @@
         passwordFieldGroup.className = 'shared-edit-token-inline-group';
 
         var passwordInput = document.createElement('input');
-        passwordInput.type = 'password';
-        passwordInput.value = initialPasswordValue || (options.hasPassword ? '********' : '');
+        passwordInput.type = 'text';
+        passwordInput.value = initialPasswordValue;
         passwordInput.placeholder = config.txtPasswordPlaceholder;
         passwordInput.className = 'modal-password-input';
         passwordInput.style.width = '100%';
@@ -976,9 +928,9 @@
         var togglePasswordBtn = document.createElement('button');
         togglePasswordBtn.type = 'button';
         togglePasswordBtn.className = 'btn btn-secondary shared-edit-token-password-toggle';
-        togglePasswordBtn.title = config.txtShowPassword;
-        togglePasswordBtn.setAttribute('aria-label', config.txtShowPassword);
-        togglePasswordBtn.innerHTML = '<i class="lucide lucide-eye"></i>';
+        togglePasswordBtn.title = config.txtHidePassword;
+        togglePasswordBtn.setAttribute('aria-label', config.txtHidePassword);
+        togglePasswordBtn.innerHTML = '<i class="lucide lucide-eye-off"></i>';
 
         function updatePasswordToggleState() {
             var isVisible = passwordInput.type === 'text';
@@ -1002,18 +954,7 @@
         passwordInput.addEventListener('input', function() {
             passwordDirty = true;
         });
-
-        passwordInput.addEventListener('focus', function() {
-            if (!passwordDirty && options.hasPassword && passwordInput.value === '********') {
-                passwordInput.value = '';
-            }
-        });
-
-        passwordInput.addEventListener('blur', function() {
-            if (!passwordDirty && options.hasPassword && passwordInput.value === '') {
-                passwordInput.value = '********';
-            }
-        });
+        updatePasswordToggleState();
 
         passwordFieldGroup.appendChild(passwordInput);
         passwordFieldGroup.appendChild(togglePasswordBtn);
@@ -1276,10 +1217,6 @@
             var nextProtocol = protocolCheckbox.checked ? 'https' : 'http';
             var nextIndexable = !!indexableCheckbox.checked;
             var nextPassword = passwordInput.value.trim();
-            if (!passwordDirty && options.hasPassword && nextPassword === '********') {
-                nextPassword = undefined; // No change
-                passwordShouldBeSaved = false;
-            }
             var nextAccessMode = permissionsSelect ? permissionsSelect.value : undefined;
             var tokenChanged = !!nextToken && nextToken !== options.token;
             var protocolChanged = nextProtocol !== (options.protocol || getPreferredPublicUrlProtocol());
@@ -1307,9 +1244,6 @@
                 allowed_users: allowedUsersChanged ? nextAllowedUsers : undefined
             })
                 .then(function() {
-                    if (passwordShouldBeSaved) {
-                        setCachedSharePassword(options.itemType, options.itemId, nextPassword);
-                    }
                     setPreferredPublicUrlProtocol(nextProtocol);
                     if (tokenChanged && syncFilterWithUpdatedToken(options.token, nextToken)) {
                         applyFilter();

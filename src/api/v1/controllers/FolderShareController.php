@@ -9,6 +9,8 @@
  *   PATCH  /api/v1/folders/{folderId}/share      - Update share settings (indexable, password)
  */
 
+require_once dirname(dirname(dirname(__DIR__))) . '/share_passwords.php';
+
 class FolderShareController {
     private $con;
     
@@ -36,7 +38,7 @@ class FolderShareController {
             $folderWorkspace = $folderRow['workspace'] ?? '';
             
             // Get share info
-            $stmt = $this->con->prepare('SELECT token, indexable, password, allowed_users FROM shared_folders WHERE folder_id = ? LIMIT 1');
+            $stmt = $this->con->prepare('SELECT token, indexable, password, password_encrypted, allowed_users FROM shared_folders WHERE folder_id = ? LIMIT 1');
             $stmt->execute([$folderId]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             
@@ -59,6 +61,7 @@ class FolderShareController {
                 'url_query' => $urls['query'],
                 'indexable' => $indexable,
                 'hasPassword' => $hasPassword,
+                'passwordValue' => poznoteDecryptSharePassword($row['password_encrypted'] ?? ''),
                 'workspace' => $folderWorkspace,
                 'allowed_users' => $allowedUsers
             ]);
@@ -117,31 +120,36 @@ class FolderShareController {
             
             $theme = isset($input['theme']) ? trim($input['theme']) : null;
             $indexable = isset($input['indexable']) ? (int)$input['indexable'] : 0;
-            $password = isset($input['password']) ? trim($input['password']) : '';
-            $hashedPassword = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
+            $passwordProvided = array_key_exists('password', $input);
+            $password = $passwordProvided ? trim($input['password'] ?? '') : '';
             
             // Check if share already exists
-            $stmt = $this->con->prepare('SELECT id FROM shared_folders WHERE folder_id = ? LIMIT 1');
+            $stmt = $this->con->prepare('SELECT id, token, password, password_encrypted FROM shared_folders WHERE folder_id = ? LIMIT 1');
             $stmt->execute([$folderId]);
-            $existsRow = $stmt->fetchColumn();
+            $existingShare = $stmt->fetch(PDO::FETCH_ASSOC);
+            $existsRow = $existingShare['id'] ?? null;
+            $hashedPassword = $passwordProvided
+                ? ($password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null)
+                : ($existingShare['password'] ?? null);
+            $encryptedPassword = $passwordProvided
+                ? poznoteEncryptSharePassword($password)
+                : ($existingShare['password_encrypted'] ?? null);
             
             $oldToken = null;
             if ($existsRow) {
-                $stmt = $this->con->prepare('SELECT token FROM shared_folders WHERE folder_id = ?');
-                $stmt->execute([$folderId]);
-                $oldToken = $stmt->fetchColumn();
+                $oldToken = $existingShare['token'] ?? null;
             }
 
             if ($existsRow) {
-                $stmt = $this->con->prepare('UPDATE shared_folders SET token = ?, theme = ?, indexable = ?, password = ?, created = CURRENT_TIMESTAMP WHERE folder_id = ?');
-                $stmt->execute([$token, $theme, $indexable, $hashedPassword, $folderId]);
+                $stmt = $this->con->prepare('UPDATE shared_folders SET token = ?, theme = ?, indexable = ?, password = ?, password_encrypted = ?, created = CURRENT_TIMESTAMP WHERE folder_id = ?');
+                $stmt->execute([$token, $theme, $indexable, $hashedPassword, $encryptedPassword, $folderId]);
                 
                 if ($oldToken && $oldToken !== $token) {
                     unregisterSharedLink($oldToken);
                 }
             } else {
-                $stmt = $this->con->prepare('INSERT INTO shared_folders (folder_id, token, theme, indexable, password) VALUES (?, ?, ?, ?, ?)');
-                $stmt->execute([$folderId, $token, $theme, $indexable, $hashedPassword]);
+                $stmt = $this->con->prepare('INSERT INTO shared_folders (folder_id, token, theme, indexable, password, password_encrypted) VALUES (?, ?, ?, ?, ?, ?)');
+                $stmt->execute([$folderId, $token, $theme, $indexable, $hashedPassword, $encryptedPassword]);
             }
             
             registerSharedLink($token, $_SESSION['user_id'], 'folder', (int)$folderId);
@@ -157,6 +165,8 @@ class FolderShareController {
                 'public' => true,
                 'url' => $urls['path'],
                 'url_query' => $urls['query'],
+                'hasPassword' => !empty($hashedPassword),
+                'passwordValue' => poznoteDecryptSharePassword($encryptedPassword),
                 'workspace' => $folderWorkspace,
                 'shared_notes_count' => 0
             ]);
@@ -261,8 +271,11 @@ class FolderShareController {
             if (array_key_exists('password', $input)) {
                 $password = trim($input['password'] ?? '');
                 $hashedPassword = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
+                $encryptedPassword = poznoteEncryptSharePassword($password);
                 $updates[] = 'password = ?';
                 $params[] = $hashedPassword;
+                $updates[] = 'password_encrypted = ?';
+                $params[] = $encryptedPassword;
             }
 
             if (array_key_exists('allowed_users', $input)) {
@@ -315,6 +328,7 @@ class FolderShareController {
             }
             if (array_key_exists('password', $input)) {
                 $response['hasPassword'] = trim($input['password'] ?? '') !== '';
+                $response['passwordValue'] = trim($input['password'] ?? '');
             }
             if (array_key_exists('allowed_users', $input)) {
                 $au = $input['allowed_users'];

@@ -9,6 +9,8 @@
  *   GET  /api/v1/shared               - List shared notes
  */
 
+require_once dirname(dirname(dirname(__DIR__))) . '/share_passwords.php';
+
 class SystemController {
     private $con;
     
@@ -160,7 +162,7 @@ class SystemController {
         
         try {
             // 1. Get all shared folders to check if notes are shared via folder
-            $sharedFoldersQuery = "SELECT sf.id, sf.folder_id, sf.token, sf.created, sf.indexable, sf.password, sf.allowed_users, f.name as folder_name, f.parent_id, f.workspace 
+            $sharedFoldersQuery = "SELECT sf.id, sf.folder_id, sf.token, sf.created, sf.indexable, sf.password, sf.password_encrypted, sf.allowed_users, f.name as folder_name, f.parent_id, f.workspace
                 FROM shared_folders sf 
                 INNER JOIN folders f ON sf.folder_id = f.id";
             $sfStmt = $this->con->prepare($sharedFoldersQuery);
@@ -225,6 +227,7 @@ class SystemController {
                 sn.indexable,
                 sn.access_mode,
                 sn.allowed_users,
+                sn.password_encrypted,
                 CASE WHEN sn.password IS NOT NULL AND sn.password != '' THEN 1 ELSE 0 END as hasPassword,
                 sn.created as shared_date,
                 e.heading,
@@ -259,6 +262,7 @@ class SystemController {
                     NULL as theme,
                     NULL as indexable,
                     'read_only' as access_mode,
+                    NULL as password_encrypted,
                     0 as hasPassword,
                     e.created as shared_date,
                     e.heading,
@@ -325,6 +329,9 @@ class SystemController {
                 } else {
                     $note['allowed_users'] = null;
                 }
+
+                $note['passwordValue'] = poznoteDecryptSharePassword($note['password_encrypted'] ?? '');
+                unset($note['password_encrypted']);
                 
                 // Add full folder path
                 $note['folder_path'] = getFolderPath($note['folder_id'], $this->con);
@@ -391,6 +398,7 @@ class SystemController {
                     'created' => $entry['created'],
                     'indexable' => isset($entry['indexable']) ? (int)$entry['indexable'] : 0,
                     'password' => !empty($entry['password']),
+                    'passwordValue' => poznoteDecryptSharePassword($entry['password_encrypted'] ?? ''),
                     'allowed_users' => !empty($entry['allowed_users']) ? json_decode($entry['allowed_users'], true) : null,
                     'folder_name' => $folder['name'],
                     'note_count' => (int)$countStmt->fetchColumn(),

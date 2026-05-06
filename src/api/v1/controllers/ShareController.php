@@ -9,6 +9,8 @@
  *   PATCH  /api/v1/notes/{noteId}/share          - Update share settings (indexable, password)
  */
 
+require_once dirname(dirname(dirname(__DIR__))) . '/share_passwords.php';
+
 class ShareController {
     private $con;
     
@@ -37,7 +39,7 @@ class ShareController {
             $noteType = $noteRow['type'] ?? 'note';
             
             // Get share info
-            $stmt = $this->con->prepare('SELECT token, indexable, password, access_mode, allowed_users FROM shared_notes WHERE note_id = ? AND access_mode IS NOT NULL LIMIT 1');
+            $stmt = $this->con->prepare('SELECT token, indexable, password, password_encrypted, access_mode, allowed_users FROM shared_notes WHERE note_id = ? AND access_mode IS NOT NULL LIMIT 1');
             $stmt->execute([$noteId]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             
@@ -68,6 +70,7 @@ class ShareController {
                 'url_workspace' => $urls['workspace'],
                 'indexable' => $indexable,
                 'hasPassword' => $hasPassword,
+                'passwordValue' => poznoteDecryptSharePassword($row['password_encrypted'] ?? ''),
                 'noteType' => $noteType,
                 'accessMode' => $accessMode,
                 'workspace' => $noteWorkspace,
@@ -129,32 +132,37 @@ class ShareController {
             
             $theme = isset($input['theme']) ? trim($input['theme']) : null;
             $indexable = isset($input['indexable']) ? (int)$input['indexable'] : 0;
-            $password = isset($input['password']) ? trim($input['password']) : '';
-            $hashedPassword = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
+            $passwordProvided = array_key_exists('password', $input);
+            $password = $passwordProvided ? trim($input['password'] ?? '') : '';
             $accessMode = $this->sanitizeAccessMode($input['access_mode'] ?? 'full', $noteType);
             
             // Check if share already exists
-            $stmt = $this->con->prepare('SELECT id FROM shared_notes WHERE note_id = ? LIMIT 1');
+            $stmt = $this->con->prepare('SELECT id, token, password, password_encrypted FROM shared_notes WHERE note_id = ? LIMIT 1');
             $stmt->execute([$noteId]);
-            $existsRow = $stmt->fetchColumn();
+            $existingShare = $stmt->fetch(PDO::FETCH_ASSOC);
+            $existsRow = $existingShare['id'] ?? null;
+            $hashedPassword = $passwordProvided
+                ? ($password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null)
+                : ($existingShare['password'] ?? null);
+            $encryptedPassword = $passwordProvided
+                ? poznoteEncryptSharePassword($password)
+                : ($existingShare['password_encrypted'] ?? null);
             
             $oldToken = null;
             if ($existsRow) {
-                $stmt = $this->con->prepare('SELECT token FROM shared_notes WHERE note_id = ?');
-                $stmt->execute([$noteId]);
-                $oldToken = $stmt->fetchColumn();
+                $oldToken = $existingShare['token'] ?? null;
             }
 
             if ($existsRow) {
-                $stmt = $this->con->prepare('UPDATE shared_notes SET token = ?, theme = ?, indexable = ?, password = ?, access_mode = ?, created = CURRENT_TIMESTAMP WHERE note_id = ?');
-                $stmt->execute([$token, $theme, $indexable, $hashedPassword, $accessMode, $noteId]);
+                $stmt = $this->con->prepare('UPDATE shared_notes SET token = ?, theme = ?, indexable = ?, password = ?, password_encrypted = ?, access_mode = ?, created = CURRENT_TIMESTAMP WHERE note_id = ?');
+                $stmt->execute([$token, $theme, $indexable, $hashedPassword, $encryptedPassword, $accessMode, $noteId]);
                 
                 if ($oldToken && $oldToken !== $token) {
                     unregisterSharedLink($oldToken);
                 }
             } else {
-                $stmt = $this->con->prepare('INSERT INTO shared_notes (note_id, token, theme, indexable, password, access_mode) VALUES (?, ?, ?, ?, ?, ?)');
-                $stmt->execute([$noteId, $token, $theme, $indexable, $hashedPassword, $accessMode]);
+                $stmt = $this->con->prepare('INSERT INTO shared_notes (note_id, token, theme, indexable, password, password_encrypted, access_mode) VALUES (?, ?, ?, ?, ?, ?, ?)');
+                $stmt->execute([$noteId, $token, $theme, $indexable, $hashedPassword, $encryptedPassword, $accessMode]);
             }
             
             registerSharedLink($token, $_SESSION['user_id'], 'note', (int)$noteId);
@@ -168,6 +176,8 @@ class ShareController {
                 'url' => $urls['path'],
                 'url_query' => $urls['query'],
                 'url_workspace' => $urls['workspace'],
+                'hasPassword' => !empty($hashedPassword),
+                'passwordValue' => poznoteDecryptSharePassword($encryptedPassword),
                 'noteType' => $noteType,
                 'accessMode' => $accessMode,
                 'workspace' => $noteWorkspace
@@ -268,8 +278,11 @@ class ShareController {
             if (array_key_exists('password', $input)) {
                 $password = trim($input['password'] ?? '');
                 $hashedPassword = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
+                $encryptedPassword = poznoteEncryptSharePassword($password);
                 $updates[] = 'password = ?';
                 $params[] = $hashedPassword;
+                $updates[] = 'password_encrypted = ?';
+                $params[] = $encryptedPassword;
             }
 
             if (array_key_exists('access_mode', $input)) {
@@ -326,6 +339,7 @@ class ShareController {
             }
             if (array_key_exists('password', $input)) {
                 $response['hasPassword'] = trim($input['password'] ?? '') !== '';
+                $response['passwordValue'] = trim($input['password'] ?? '');
             }
             if (array_key_exists('access_mode', $input)) {
                 $response['accessMode'] = $this->sanitizeAccessMode($input['access_mode'], $noteType);
