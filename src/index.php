@@ -169,7 +169,7 @@ $forcedPublicWorkspaceTheme = function_exists('getPublicWorkspaceTheme') ? getPu
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Poznote">
-    <link rel="manifest" href="pwa/manifest.webmanifest?v=<?php echo $v; ?>">
+    <link rel="manifest" href="pwa/manifest.webmanifest?v=<?php echo $v; ?>" crossorigin="use-credentials">
     <link rel="icon" href="favicon.ico" sizes="512x512" type="image/png">
     <link rel="apple-touch-icon" href="pwa/poznote.png?v=<?php echo $v; ?>">
     <?php if ($forcedPublicWorkspaceTheme !== null): ?>
