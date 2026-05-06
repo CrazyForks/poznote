@@ -28,6 +28,11 @@
         { id: 'code-markdown', icon: 'lucide-file-code', iconColor: '#083fa1', label: 'Markdown', lang: 'markdown' }
     ];
 
+    function isSyntaxHighlightLanguage(language) {
+        var normalizedLanguage = String(language || '').trim().toLowerCase();
+        return !!(normalizedLanguage && typeof hljs !== 'undefined' && hljs && typeof hljs.getLanguage === 'function' && hljs.getLanguage(normalizedLanguage));
+    }
+
     // Available callout / quote types
     var CALLOUT_TYPES = [
         { id: 'plain', labelKey: 'slash_menu.blockquote', fallback: 'Blockquote' },
@@ -449,7 +454,7 @@
             const languageBadge = disableHighlight ? 'CODE' : language;
             code.setAttribute('data-language', languageBadge);
             pre.setAttribute('data-language', languageBadge);
-            if (!disableHighlight) {
+            if (!disableHighlight && isSyntaxHighlightLanguage(language)) {
                 code.className = 'language-' + language;
             }
         }
@@ -479,7 +484,7 @@
                 sel.addRange(newRange);
 
                 // Trigger syntax highlighting if available
-                if (language && !disableHighlight && typeof window.applySyntaxHighlighting === 'function') {
+                if (language && !disableHighlight && isSyntaxHighlightLanguage(language) && typeof window.applySyntaxHighlighting === 'function') {
                     window.applySyntaxHighlighting(pre);
                 }
 
@@ -490,7 +495,7 @@
             selection.removeAllRanges();
             selection.addRange(newRange);
 
-            if (language && !disableHighlight && typeof window.applySyntaxHighlighting === 'function') {
+            if (language && !disableHighlight && isSyntaxHighlightLanguage(language) && typeof window.applySyntaxHighlighting === 'function') {
                 setTimeout(function () {
                     window.applySyntaxHighlighting(pre);
                 }, 10);

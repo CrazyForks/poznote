@@ -49,6 +49,73 @@ function markdownUsesPlainCodeBlockLanguage($language) {
     return $normalizedLanguage === 'normal' || $normalizedLanguage === 'code';
 }
 
+function markdownUsesSyntaxHighlightLanguage($language) {
+    $normalizedLanguage = is_string($language) ? strtolower(trim($language)) : '';
+    if ($normalizedLanguage === '') {
+        return false;
+    }
+
+    $highlightLanguages = [
+        'bash' => true, 'sh' => true, 'c' => true, 'cpp' => true, 'c++' => true, 'csharp' => true, 'cs' => true, 'c#' => true,
+        'css' => true, 'diff' => true, 'patch' => true, 'go' => true, 'graphql' => true, 'gql' => true, 'ini' => true,
+        'java' => true, 'javascript' => true, 'js' => true, 'jsx' => true, 'mjs' => true, 'cjs' => true, 'json' => true,
+        'kotlin' => true, 'less' => true, 'lua' => true, 'makefile' => true, 'markdown' => true, 'md' => true,
+        'objectivec' => true, 'objc' => true, 'perl' => true, 'php' => true, 'php-template' => true,
+        'plaintext' => true, 'text' => true, 'txt' => true, 'python' => true, 'py' => true, 'gyp' => true, 'ipython' => true,
+        'python-repl' => true, 'pycon' => true, 'r' => true, 'ruby' => true, 'rb' => true, 'rust' => true, 'rs' => true,
+        'scss' => true, 'shell' => true, 'console' => true, 'shellsession' => true, 'sql' => true, 'swift' => true,
+        'typescript' => true, 'ts' => true, 'tsx' => true, 'mts' => true, 'cts' => true, 'vbnet' => true, 'wasm' => true,
+        'xml' => true, 'html' => true, 'xhtml' => true, 'svg' => true, 'yaml' => true, 'yml' => true,
+    ];
+
+    return isset($highlightLanguages[$normalizedLanguage]);
+}
+
+function markdownUsesPlainFormattingCodeBlockLanguage($language) {
+    $normalizedLanguage = is_string($language) ? strtolower(trim($language)) : '';
+    return $normalizedLanguage !== '' && (markdownUsesPlainCodeBlockLanguage($normalizedLanguage) || !markdownUsesSyntaxHighlightLanguage($normalizedLanguage));
+}
+
+function markdownGetPlainCodeBlockDisplayLanguage($language) {
+    if (markdownUsesPlainCodeBlockLanguage($language)) {
+        return 'CODE';
+    }
+
+    return trim((string)$language) ?: 'CODE';
+}
+
+function applyMarkdownPlainCodeInlineStyles($html) {
+    $html = preg_replace('/\*\*\*(?=\S)(.*?\S)\*\*\*/s', '<strong><em>$1</em></strong>', $html);
+    $html = preg_replace('/\*\*(?=\S)(.*?\S)\*\*/s', '<strong>$1</strong>', $html);
+    $html = preg_replace('/(?<!\*)\*(?!\*)(?=\S)(.*?\S)(?<!\*)\*(?!\*)/s', '<em>$1</em>', $html);
+    $html = preg_replace('/~~(?=\S)(.*?\S)~~/s', '<del>$1</del>', $html);
+    $html = preg_replace('/==(?=\S)(.*?\S)==/s', '<mark>$1</mark>', $html);
+    $html = preg_replace('/&lt;u&gt;(?=\S)(.*?\S)&lt;\/u&gt;/si', '<u>$1</u>', $html);
+
+    return $html;
+}
+
+function renderMarkdownPlainCodeBlockContent($code) {
+    $protectedSpans = [];
+    $spanIndex = 0;
+
+    $text = preg_replace_callback('/<span\s+style=(["\'])(.*?)\1>([^<]*)<\/span>/i', function($matches) use (&$protectedSpans, &$spanIndex) {
+        $placeholder = "\x00MDCODESPAN" . $spanIndex . "\x00";
+        $styleAttr = htmlspecialchars($matches[2], ENT_QUOTES, 'UTF-8');
+        $content = applyMarkdownPlainCodeInlineStyles(htmlspecialchars($matches[3], ENT_QUOTES, 'UTF-8'));
+        $protectedSpans[$spanIndex] = '<span style="' . $styleAttr . '">' . $content . '</span>';
+        $spanIndex++;
+        return $placeholder;
+    }, (string)$code);
+
+    $html = applyMarkdownPlainCodeInlineStyles(htmlspecialchars($text, ENT_QUOTES, 'UTF-8'));
+
+    return preg_replace_callback('/\x00MDCODESPAN(\d+)\x00/', function($matches) use ($protectedSpans) {
+        $index = (int)$matches[1];
+        return isset($protectedSpans[$index]) ? $protectedSpans[$index] : $matches[0];
+    }, $html);
+}
+
 function protectMarkdownBackslashEscapes($text, &$protectedEscapes, &$escapeIndex) {
     $escapableChars = "!\"#\$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
     $charClass = '[' . preg_quote($escapableChars, '/') . ']';
@@ -286,14 +353,18 @@ function parseMarkdown($text) {
         if (strtolower($lang) === 'mermaid') {
             $protectedCodeBlocks[$codeBlockIndex] = renderMarkdownMermaidBlock($code);
         } else {
-            // Escape HTML in code blocks so it displays as text
-            $escapedCode = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
-            if (markdownUsesPlainCodeBlockLanguage($lang)) {
-                $protectedCodeBlocks[$codeBlockIndex] = '<pre data-language="CODE"><code data-language="CODE">' . $escapedCode . '</code></pre>';
-            } elseif ($lang !== '') {
+            if (markdownUsesPlainFormattingCodeBlockLanguage($lang)) {
+                $escapedCode = renderMarkdownPlainCodeBlockContent($code);
+                $escapedPlainLang = htmlspecialchars(markdownGetPlainCodeBlockDisplayLanguage($lang), ENT_QUOTES, 'UTF-8');
+                $protectedCodeBlocks[$codeBlockIndex] = '<pre data-language="' . $escapedPlainLang . '"><code data-language="' . $escapedPlainLang . '">' . $escapedCode . '</code></pre>';
+            } elseif ($lang !== '' && markdownUsesSyntaxHighlightLanguage($lang)) {
+                // Escape HTML in code blocks so it displays as text
+                $escapedCode = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
                 $escapedLang = htmlspecialchars($lang, ENT_QUOTES, 'UTF-8');
                 $protectedCodeBlocks[$codeBlockIndex] = '<pre data-language="' . $escapedLang . '"><code class="language-' . $escapedLang . '">' . $escapedCode . '</code></pre>';
             } else {
+                // Escape HTML in code blocks so it displays as text
+                $escapedCode = htmlspecialchars($code, ENT_QUOTES, 'UTF-8');
                 $protectedCodeBlocks[$codeBlockIndex] = '<pre><code>' . $escapedCode . '</code></pre>';
             }
         }
