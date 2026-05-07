@@ -398,9 +398,68 @@ function clearPublicWorkspaceAuthentication(): void {
 
     unset($_SESSION['public_workspace_access']);
 
-    if ($isPublicWorkspaceAuth) {
-        unset($_SESSION['authenticated'], $_SESSION['user_id'], $_SESSION['user'], $_SESSION['auth_method']);
+    if (!$isPublicWorkspaceAuth) {
+        unset($_SESSION['public_workspace_original_auth']);
+        return;
     }
+
+    $originalAuth = $_SESSION['public_workspace_original_auth'] ?? null;
+    unset($_SESSION['public_workspace_original_auth']);
+
+    if (is_array($originalAuth) && !empty($originalAuth['authenticated']) && isset($originalAuth['user_id'], $originalAuth['user']) && is_array($originalAuth['user'])) {
+        $_SESSION['authenticated'] = true;
+        $_SESSION['user_id'] = (int)$originalAuth['user_id'];
+        $_SESSION['user'] = $originalAuth['user'];
+
+        if (array_key_exists('auth_method', $originalAuth)) {
+            if ($originalAuth['auth_method'] === null || $originalAuth['auth_method'] === '') {
+                unset($_SESSION['auth_method']);
+            } else {
+                $_SESSION['auth_method'] = (string)$originalAuth['auth_method'];
+            }
+        }
+
+        if (!empty($originalAuth['extra_session_keys']) && is_array($originalAuth['extra_session_keys'])) {
+            foreach ($originalAuth['extra_session_keys'] as $sessionKey => $sessionValue) {
+                $_SESSION[$sessionKey] = $sessionValue;
+            }
+        }
+
+        return;
+    }
+
+    unset($_SESSION['authenticated'], $_SESSION['user_id'], $_SESSION['user'], $_SESSION['auth_method']);
+}
+
+function storeOriginalAuthForPublicWorkspace(): void {
+    if (!isRealUserAuthenticated() || isset($_SESSION['public_workspace_original_auth'])) {
+        return;
+    }
+
+    $extraSessionKeys = [];
+    foreach ($_SESSION as $sessionKey => $sessionValue) {
+        if (strpos((string)$sessionKey, 'oidc_') === 0) {
+            $extraSessionKeys[$sessionKey] = $sessionValue;
+        }
+    }
+
+    $_SESSION['public_workspace_original_auth'] = [
+        'authenticated' => true,
+        'user_id' => (int)($_SESSION['user_id'] ?? 0),
+        'user' => is_array($_SESSION['user'] ?? null) ? $_SESSION['user'] : [],
+        'auth_method' => $_SESSION['auth_method'] ?? null,
+        'extra_session_keys' => $extraSessionKeys,
+    ];
+}
+
+function hasStoredOriginalAuthForPublicWorkspace(): bool {
+    $originalAuth = $_SESSION['public_workspace_original_auth'] ?? null;
+    return is_array($originalAuth)
+        && !empty($originalAuth['authenticated'])
+        && isset($originalAuth['user_id'], $originalAuth['user'])
+        && (int)$originalAuth['user_id'] > 0
+        && is_array($originalAuth['user'])
+        && !empty($originalAuth['user']);
 }
 
 function getPublicWorkspaceViewerUserId(): int {
@@ -607,6 +666,8 @@ function activatePublicWorkspaceAccess(array $workspaceAccess, int $viewerUserId
         return;
     }
 
+    storeOriginalAuthForPublicWorkspace();
+
     if ($viewerUserId <= 0 && isRealUserAuthenticated()) {
         $viewerUserId = isset($_SESSION['user_id']) ? max(0, (int)$_SESSION['user_id']) : 0;
     }
@@ -635,6 +696,11 @@ function maybeAuthenticatePublicWorkspaceRequest(): bool {
     $explicitPublicWorkspaceRequest = isExplicitPublicWorkspaceRequest();
 
     if ($activeAccess !== null && !$explicitPublicWorkspaceRequest) {
+        if (hasStoredOriginalAuthForPublicWorkspace()) {
+            clearPublicWorkspaceAuthentication();
+            return false;
+        }
+
         $workspaceAccess = resolvePublicWorkspaceAccess((string)$activeAccess['workspace_name']);
         if ($workspaceAccess === null) {
             clearPublicWorkspaceAuthentication();
