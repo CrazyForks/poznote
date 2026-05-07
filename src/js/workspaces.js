@@ -1070,6 +1070,7 @@ function showWorkspaceShareOptionsModal(button) {
                 button.setAttribute('data-password-value', passwordValue || '');
             }
             syncModalShareState(json || {});
+                closeModal();
             shareBtn.disabled = false;
             if (unshareBtn) {
                 unshareBtn.disabled = false;

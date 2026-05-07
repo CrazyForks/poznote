@@ -396,9 +396,9 @@
         <div class="form-group">
             <input id="confirmDeleteInput" type="text" placeholder="<?php echo t_h('modals.workspaces.delete_placeholder', [], 'Type workspace name to confirm'); ?>" />
         </div>
-        <div class="buttons-with-margin">
-            <button id="confirmDeleteBtn" class="btn btn-danger" disabled><?php echo t_h('modals.workspaces.delete_button', [], 'Delete workspace'); ?></button>
+        <div class="buttons-with-margin workspace-delete-modal-actions">
             <button data-action="close-delete-modal" class="btn btn-secondary"><?php echo t_h('common.cancel'); ?></button>
+            <button id="confirmDeleteBtn" class="btn btn-danger" disabled><?php echo t_h('modals.workspaces.delete_button', [], 'Delete workspace'); ?></button>
         </div>
     </div>
 </div>
