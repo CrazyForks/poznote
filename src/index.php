@@ -32,7 +32,7 @@ header("X-Frame-Options: SAMEORIGIN");
 header("Referrer-Policy: strict-origin-when-cross-origin");
 
 // Authentication check
-require 'auth.php';
+require_once 'auth.php';
 requireAuth();
 
 require_once 'config.php';

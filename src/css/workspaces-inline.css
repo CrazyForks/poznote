@@ -244,6 +244,19 @@ body.dark-mode .dropdown-menu .dropdown-item.text-danger:hover {
     color: #ff8b8b !important;
 }
 
+:root[data-theme='dark'] .dropdown-toggle-btn,
+body.dark-mode .dropdown-toggle-btn {
+    background-color: var(--dm-surface) !important;
+    border-color: var(--dm-border) !important;
+    color: var(--dm-text) !important;
+}
+
+:root[data-theme='dark'] .dropdown-toggle-btn:hover,
+body.dark-mode .dropdown-toggle-btn:hover {
+    background-color: #3d3d3d !important;
+    border-color: #555555 !important;
+}
+
 .btn-text-mobile-only {
     display: none;
 }

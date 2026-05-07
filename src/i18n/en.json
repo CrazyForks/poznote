@@ -491,7 +491,7 @@
         "confirm": {
           "title": "Share workspace in read-only mode",
           "message": "Anyone with the URL for workspace \"{{workspace}}\" will have access to all notes and folders in this workspace in read-only mode.",
-          "confirm_button": "Share workspace in read-only mode"
+          "confirm_button": "Share"
         },
         "messages": {
           "enabled": "Read-only workspace link enabled",
@@ -509,6 +509,7 @@
           "disabled": "Not shared publicly"
         },
         "help": "Anyone with this URL opens Poznote directly on this workspace in read-only mode.",
+        "url_label": "Public URL",
         "options": {
           "require_login": "Require Poznote login",
           "restrict_users": "Restrict to specific users",

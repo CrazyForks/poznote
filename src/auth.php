@@ -426,8 +426,22 @@ function getPublicWorkspacePasswordSessionKey(array $workspaceAccess): string {
     return 'public_workspace_auth_' . hash('sha256', $registryKey);
 }
 
+function getPublicWorkspaceBasePath(): string {
+    $scriptName = (string)($_SERVER['SCRIPT_NAME'] ?? '');
+    $scriptDir = str_replace('\\', '/', dirname($scriptName));
+    if ($scriptDir === '/' || $scriptDir === '\\' || $scriptDir === '.') {
+        return '';
+    }
+
+    return rtrim($scriptDir, '/');
+}
+
+function buildPublicWorkspacePath(string $workspaceName): string {
+    return getPublicWorkspaceBasePath() . '/' . rawurlencode(normalizePublicWorkspaceName($workspaceName));
+}
+
 function buildExplicitPublicWorkspaceUrl(string $workspaceName): string {
-    return 'index.php?workspace=' . urlencode($workspaceName) . '&public_workspace=1';
+    return buildPublicWorkspacePath($workspaceName);
 }
 
 function decodePublicWorkspaceAllowedUsers($allowedUsersRaw): array {
@@ -459,7 +473,7 @@ function loadPublicWorkspacePageHelpers(): string {
 function renderPublicWorkspaceLoginRequiredPage(array $workspaceAccess): void {
     $currentLang = loadPublicWorkspacePageHelpers();
     $redirect = getCurrentRelativeRequestUri();
-    if (strpos($redirect, 'public_workspace=') === false) {
+    if (empty($_SERVER['POZNOTE_PUBLIC_WORKSPACE_SLUG']) && strpos($redirect, 'public_workspace=') === false) {
         $redirect .= (strpos($redirect, '?') === false ? '?' : '&') . 'public_workspace=1';
     }
     $_SESSION['post_login_redirect'] = $redirect;

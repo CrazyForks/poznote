@@ -501,7 +501,7 @@
       "confirm": {
         "title": "Compartir espacio de trabajo en modo solo lectura",
         "message": "Cualquier persona con la URL del espacio de trabajo \"{{workspace}}\" tendrá acceso a todas las notas y carpetas de este espacio de trabajo en modo solo lectura.",
-        "confirm_button": "Compartir espacio de trabajo en modo solo lectura"
+        "confirm_button": "Compartir"
       },
       "messages": {
         "enabled": "Enlace de espacio de trabajo de solo lectura activado",
@@ -519,6 +519,7 @@
         "disabled": "No compartido públicamente"
       },
       "help": "Cualquier persona con esta URL abre Poznote directamente en este espacio de trabajo en modo solo lectura.",
+      "url_label": "URL pública",
       "options": {
         "require_login": "Requerir inicio de sesión en Poznote",
         "restrict_users": "Restringir a usuarios específicos",
@@ -2151,7 +2152,6 @@
     "config": {
       "title": "Configuración",
       "status": "Estado",
-      "repository": "Repositorio",
       "branch": "Rama",
       "mode": "Modo de sincronización",
       "token": "Token de acceso",
