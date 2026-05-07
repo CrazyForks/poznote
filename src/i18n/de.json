@@ -502,7 +502,7 @@
       "confirm": {
         "title": "Arbeitsbereich schreibgeschützt teilen",
         "message": "Jede Person mit der URL des Arbeitsbereichs \"{{workspace}}\" hat Zugriff auf alle Notizen und Ordner in diesem Arbeitsbereich im schreibgeschützten Modus.",
-        "confirm_button": "Arbeitsbereich schreibgeschützt teilen"
+        "confirm_button": "Teilen"
       },
       "messages": {
         "enabled": "Schreibgeschützter Arbeitsbereichslink aktiviert",
@@ -520,6 +520,7 @@
         "disabled": "Nicht öffentlich geteilt"
       },
       "help": "Jede Person mit dieser URL öffnet Poznote direkt in diesem Arbeitsbereich im schreibgeschützten Modus.",
+      "url_label": "Öffentliche URL",
       "options": {
         "require_login": "Poznote-Anmeldung erforderlich",
         "restrict_users": "Auf bestimmte Benutzer beschränken",

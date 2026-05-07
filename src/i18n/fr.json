@@ -513,7 +513,7 @@
       "confirm": {
         "title": "Partager l’espace de travail en lecture seule",
         "message": "Toute personne disposant de l'URL de l'espace de travail \"{{workspace}}\" aura accès à toutes les notes et tous les dossiers de cet espace de travail en lecture seule.",
-        "confirm_button": "Partager l’espace de travail en lecture seule"
+        "confirm_button": "Partager"
       },
       "messages": {
         "enabled": "Lien d’espace de travail en lecture seule activé",
@@ -531,6 +531,7 @@
         "disabled": "Non partagé publiquement"
       },
       "help": "Toute personne disposant de cette URL ouvre Poznote directement sur cet espace de travail en lecture seule.",
+      "url_label": "URL publique",
       "options": {
         "require_login": "Exiger une connexion Poznote",
         "restrict_users": "Restreindre à des utilisateurs spécifiques",

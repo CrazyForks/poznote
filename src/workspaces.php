@@ -32,12 +32,8 @@ if ($_POST) {
         if (!function_exists('buildWorkspaceSharePublicUrl')) {
             function buildWorkspaceSharePublicUrl(string $workspaceName): string {
                 $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
-                $scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '');
-                if ($scriptDir === '/' || $scriptDir === '\\' || $scriptDir === '.') {
-                    $scriptDir = '';
-                }
 
-                return getProtocol() . '://' . $host . $scriptDir . '/index.php?workspace=' . rawurlencode($workspaceName) . '&public_workspace=1';
+                return getProtocol() . '://' . $host . buildPublicWorkspacePath($workspaceName);
             }
         }
 
@@ -626,12 +622,8 @@ if ($_POST) {
 if (!function_exists('buildWorkspaceSharePublicUrl')) {
     function buildWorkspaceSharePublicUrl(string $workspaceName): string {
         $host = $_SERVER['HTTP_HOST'] ?? ($_SERVER['SERVER_NAME'] ?? 'localhost');
-        $scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '');
-        if ($scriptDir === '/' || $scriptDir === '\\' || $scriptDir === '.') {
-            $scriptDir = '';
-        }
 
-        return getProtocol() . '://' . $host . $scriptDir . '/index.php?workspace=' . rawurlencode($workspaceName) . '&public_workspace=1';
+        return getProtocol() . '://' . $host . buildPublicWorkspacePath($workspaceName);
     }
 }
 
@@ -653,6 +645,7 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         'name' => $workspaceName,
         'readonly_token' => $readonlyToken,
         'readonly_url' => $readonlyToken !== '' ? buildWorkspaceSharePublicUrl($workspaceName) : '',
+        'readonly_preview_url' => buildWorkspaceSharePublicUrl($workspaceName),
         'readonly_has_password' => !empty($row['readonly_password']),
         'readonly_password_value' => poznoteDecryptSharePassword($row['readonly_password_encrypted'] ?? ''),
         'readonly_login_required' => !empty($row['readonly_login_required']),
@@ -689,7 +682,7 @@ try {
     <script src="js/theme-init.js?v=<?php echo $cache_v; ?>"></script>
     <script src="js/globals.js?v=<?php echo $cache_v; ?>"></script>
     <link rel="stylesheet" href="css/lucide.css?v=<?php echo $cache_v; ?>">
-    <link rel="stylesheet" href="css/workspaces.css?v=<?php echo $cache_v; ?>">
+    <link rel="stylesheet" href="css/workspaces.css?v=<?php echo $cache_v; ?>&m=<?php echo @filemtime('css/workspaces.css') ?: time(); ?>">
     <link rel="stylesheet" href="css/modals/base.css?v=<?php echo $cache_v; ?>">
     <link rel="stylesheet" href="css/modals/specific-modals.css?v=<?php echo $cache_v; ?>">
     <link rel="stylesheet" href="css/modals/attachments.css?v=<?php echo $cache_v; ?>">
@@ -725,6 +718,7 @@ try {
     data-txt-workspace-share-copy-success="<?php echo htmlspecialchars(t('workspaces.share.messages.url_copied', [], 'Share link copied to clipboard!', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
     data-txt-workspace-share-copy-failed="<?php echo htmlspecialchars(t('workspaces.share.errors.copy_failed', [], 'Failed to copy share link', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
     data-txt-workspace-share-help="<?php echo htmlspecialchars(t('workspaces.share.help', [], 'Anyone with this URL opens Poznote directly on this workspace in read-only mode.', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
+        data-txt-workspace-share-url-label="<?php echo htmlspecialchars(t('workspaces.share.url_label', [], 'Public URL', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
         data-txt-workspace-share-password-label="<?php echo htmlspecialchars(t('index.public_modal.password', [], 'Password (optional)', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
         data-txt-workspace-share-password-placeholder="<?php echo htmlspecialchars(t('index.public_modal.password_placeholder', [], 'Enter a password', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
         data-txt-show-password="<?php echo htmlspecialchars(t('login.show_password', [], 'Show password', $currentLang), ENT_QUOTES, 'UTF-8'); ?>"
@@ -815,6 +809,7 @@ try {
                                             data-ws="<?php echo htmlspecialchars($ws, ENT_QUOTES); ?>"
                                             data-shared="<?php echo $workspaceReadonlyEnabled ? '1' : '0'; ?>"
                                             data-url="<?php echo htmlspecialchars((string)($workspaceRow['readonly_url'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                            data-preview-url="<?php echo htmlspecialchars((string)($workspaceRow['readonly_preview_url'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                             data-has-password="<?php echo !empty($workspaceRow['readonly_has_password']) ? '1' : '0'; ?>"
                                             data-password-value="<?php echo htmlspecialchars((string)($workspaceRow['readonly_password_value'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                             data-login-required="<?php echo !empty($workspaceRow['readonly_login_required']) ? '1' : '0'; ?>"
@@ -884,7 +879,7 @@ try {
     <script src="js/theme-manager.js"></script>
     <script src="js/modal-alerts.js"></script>
     <script src="js/navigation.js"></script>
-    <script src="js/workspaces.js"></script>
+    <script src="js/workspaces.js?v=<?php echo $cache_v; ?>&m=<?php echo @filemtime('js/workspaces.js') ?: time(); ?>"></script>
     <script src="js/workspace-background.js"></script>
     <script src="js/modals-events.js"></script>
     

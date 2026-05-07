@@ -57,6 +57,21 @@ body {
     font-weight: bold;
 }
 
+#create-workspace-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+#create-workspace-form .form-group {
+    flex: 1 1 auto;
+    margin-bottom: 0;
+}
+
+#create-workspace-form input {
+    width: 100%;
+}
+
 /* Liste des espaces de travail */
 .workspace-list {
     margin-top: 20px;
@@ -235,35 +250,90 @@ body {
     color: #374151;
 }
 
-.shared-edit-token-modal .shared-edit-token-inline-group {
-    display: flex;
+.shared-edit-token-modal .workspace-share-modal-url-row {
+    padding: 10px 12px;
+    border: 1px solid #dbeafe;
+    border-radius: 8px;
+    background: #eff6ff;
+}
+
+.shared-edit-token-modal .workspace-share-modal-url-inline-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     align-items: center;
 }
 
-.shared-edit-token-modal .modal-password-input {
-    flex: 1 1 auto;
+.shared-edit-token-modal .workspace-share-modal-url-value {
     min-width: 0;
     min-height: 40px;
+    display: flex;
+    align-items: center;
+}
+
+.shared-edit-token-modal .workspace-share-modal-url {
+    display: block;
+    width: 100%;
+    color: #0f5f93;
+    font-size: 13px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    text-decoration: none;
+}
+
+.shared-edit-token-modal .workspace-share-modal-url.is-preview {
+    color: #374151;
+}
+
+.shared-edit-token-modal a.workspace-share-modal-url:hover {
+    color: #084b75;
+    text-decoration: underline;
+}
+
+.shared-edit-token-modal .shared-edit-token-inline-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.shared-edit-token-modal .modal-password-input {
+    min-width: 0;
+    height: 40px;
     padding: 8px 10px;
     border: 1px solid #d1d5db;
     border-radius: 6px;
     font-size: 14px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+    line-height: 1.2;
 }
 
-.shared-edit-token-modal .shared-edit-token-password-toggle {
-    flex: 0 0 42px;
-    width: 42px;
-    min-width: 42px;
+.shared-edit-token-modal .shared-edit-token-password-toggle,
+.shared-edit-token-modal .workspace-share-modal-copy-btn {
+    width: 40px;
+    min-width: 40px;
     height: 40px;
     padding: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    margin: 0;
+    box-sizing: border-box;
+    line-height: 1;
+    align-self: stretch;
+}
+
+.shared-edit-token-modal .workspace-share-modal-copy-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .shared-edit-token-modal .shared-edit-token-password-toggle i,
-.shared-edit-token-modal .shared-edit-token-password-toggle svg {
+.shared-edit-token-modal .shared-edit-token-password-toggle svg,
+.shared-edit-token-modal .workspace-share-modal-copy-btn i,
+.shared-edit-token-modal .workspace-share-modal-copy-btn svg {
     width: 18px;
     height: 18px;
 }
@@ -357,6 +427,27 @@ body.dark-mode .shared-edit-token-modal .indexable-label-text {
     color: #eef2f7;
 }
 
+html[data-theme='dark'] .shared-edit-token-modal .workspace-share-modal-url-row,
+body.dark-mode .shared-edit-token-modal .workspace-share-modal-url-row {
+    background: rgba(96, 165, 250, 0.12);
+    border-color: rgba(96, 165, 250, 0.26);
+}
+
+html[data-theme='dark'] .shared-edit-token-modal .workspace-share-modal-url,
+body.dark-mode .shared-edit-token-modal .workspace-share-modal-url {
+    color: #93c5fd;
+}
+
+html[data-theme='dark'] .shared-edit-token-modal .workspace-share-modal-url.is-preview,
+body.dark-mode .shared-edit-token-modal .workspace-share-modal-url.is-preview {
+    color: #d8dde5;
+}
+
+html[data-theme='dark'] .shared-edit-token-modal a.workspace-share-modal-url:hover,
+body.dark-mode .shared-edit-token-modal .workspace-share-modal-url:hover {
+    color: #bfdbfe;
+}
+
 html[data-theme='dark'] .shared-edit-token-modal .modal-password-input,
 body.dark-mode .shared-edit-token-modal .modal-password-input {
     background: #34383d;
@@ -378,14 +469,18 @@ body.dark-mode .shared-edit-token-modal .modal-password-input:focus {
 }
 
 html[data-theme='dark'] .shared-edit-token-modal .shared-edit-token-password-toggle,
-body.dark-mode .shared-edit-token-modal .shared-edit-token-password-toggle {
+html[data-theme='dark'] .shared-edit-token-modal .workspace-share-modal-copy-btn,
+body.dark-mode .shared-edit-token-modal .shared-edit-token-password-toggle,
+body.dark-mode .shared-edit-token-modal .workspace-share-modal-copy-btn {
     background: #454b52;
     border-color: #5b636d;
     color: #f5f7fa;
 }
 
 html[data-theme='dark'] .shared-edit-token-modal .shared-edit-token-password-toggle:hover,
-body.dark-mode .shared-edit-token-modal .shared-edit-token-password-toggle:hover {
+html[data-theme='dark'] .shared-edit-token-modal .workspace-share-modal-copy-btn:hover,
+body.dark-mode .shared-edit-token-modal .shared-edit-token-password-toggle:hover,
+body.dark-mode .shared-edit-token-modal .workspace-share-modal-copy-btn:hover {
     background: #535b64;
     color: #ffffff;
 }
@@ -440,6 +535,19 @@ body.dark-mode .shared-edit-token-modal .share-user-list-message.is-error {
     .shared-edit-token-modal .shared-edit-token-field-row {
         grid-template-columns: 1fr;
         gap: 6px;
+    }
+
+    .shared-edit-token-modal .workspace-share-modal-url-row {
+        padding-bottom: 8px;
+    }
+
+    .shared-edit-token-modal .workspace-share-modal-url-inline-group {
+        align-items: flex-start;
+    }
+
+    .shared-edit-token-modal .workspace-share-modal-url-value {
+        min-height: 0;
+        align-items: flex-start;
     }
 
     .shared-edit-token-modal .shared-edit-token-modal-actions {
@@ -764,6 +872,12 @@ body.dark-mode .shared-edit-token-modal .share-user-list-message.is-error {
     }
     
     /* Form styling for mobile */
+    #create-workspace-form {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
     #create-workspace-form input {
         width: 100% !important;
         padding: 12px !important;

@@ -502,7 +502,7 @@
       "confirm": {
         "title": "以只读模式共享工作区",
         "message": "任何拥有工作区“{{workspace}}”URL 的人都可以以只读模式访问此工作区中的所有笔记和文件夹。",
-        "confirm_button": "以只读模式共享工作区"
+        "confirm_button": "分享"
       },
       "messages": {
         "enabled": "只读工作区链接已启用",
@@ -2298,7 +2298,6 @@
     "config": {
       "title": "配置",
       "status": "状态",
-      "repository": "仓库",
       "branch": "分支",
       "mode": "同步模式",
       "token": "访问令牌",
