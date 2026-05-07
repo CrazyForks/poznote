@@ -1011,6 +1011,12 @@ body.dark-mode .shared-edit-token-modal .share-user-list-message.is-error {
     margin-top: 12px;
 }
 
+#deleteModal .workspace-delete-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
 /* Text colors */
 .text-danger {
     color: red;
