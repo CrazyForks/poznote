@@ -9,8 +9,9 @@
     border: 2px dashed #ddd;
     border-radius: 8px;
     overflow: hidden;
-    max-width: 400px !important;
-    width: 400px !important;
+    max-width: 100% !important;
+    width: 400px;
+    box-sizing: border-box;
 }
 
 .background-preview {
@@ -35,6 +36,7 @@
 
 .background-upload-controls {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     margin: 15px 0;
 }
@@ -54,6 +56,10 @@
     font-weight: 400;
     cursor: pointer;
     transition: background-color 0.2s;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 #uploadBackgroundBtn:hover {

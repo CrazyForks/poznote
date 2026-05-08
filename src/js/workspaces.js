@@ -775,11 +775,6 @@ function showWorkspaceShareOptionsModal(button) {
     var passwordRow = document.createElement('div');
     passwordRow.className = 'shared-edit-token-field-row';
 
-    var passwordLabel = document.createElement('label');
-    passwordLabel.className = 'shared-edit-token-field-label';
-    passwordLabel.textContent = getWorkspaceShareText('workspace-share-password-label', 'Password (optional)');
-    passwordRow.appendChild(passwordLabel);
-
     var passwordValue = document.createElement('div');
     passwordValue.className = 'shared-edit-token-field-value';
 
@@ -789,7 +784,7 @@ function showWorkspaceShareOptionsModal(button) {
     var passwordInput = document.createElement('input');
     passwordInput.type = 'password';
     passwordInput.value = currentPasswordValue;
-    passwordInput.placeholder = getWorkspaceShareText('workspace-share-password-placeholder', 'Enter a password');
+    passwordInput.placeholder = getWorkspaceShareText('workspace-share-password-label', 'Password (optional)');
     passwordInput.className = 'modal-password-input';
     passwordInput.autocomplete = 'new-password';
 
