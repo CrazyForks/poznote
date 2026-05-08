@@ -1070,12 +1070,33 @@ function showWorkspaceShareOptionsModal(button) {
                 button.setAttribute('data-password-value', passwordValue || '');
             }
             syncModalShareState(json || {});
-                closeModal();
             shareBtn.disabled = false;
             if (unshareBtn) {
                 unshareBtn.disabled = false;
             }
-            return json;
+            if (!currentShareUrl) {
+                closeModal();
+                return json;
+            }
+
+            return copyWorkspaceShareUrl(currentShareUrl)
+                .then(function () {
+                    showWorkspaceShareToast(
+                        getWorkspaceShareText('workspace-share-copy-success', 'Share link copied to clipboard!'),
+                        'success'
+                    );
+                    closeModal();
+                    return json;
+                })
+                .catch(function (err) {
+                    console.error('Error copying workspace share URL after save:', err);
+                    showWorkspaceShareToast(
+                        getWorkspaceShareText('workspace-share-copy-failed', 'Failed to copy share link'),
+                        'danger'
+                    );
+                    closeModal();
+                    return json;
+                });
         }).catch(function () {
             shareBtn.disabled = false;
             if (unshareBtn) {

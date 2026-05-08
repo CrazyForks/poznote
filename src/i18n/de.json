@@ -502,7 +502,7 @@
       "confirm": {
         "title": "Arbeitsbereich schreibgeschützt teilen",
         "message": "Jede Person mit der URL des Arbeitsbereichs \"{{workspace}}\" hat Zugriff auf alle Notizen und Ordner in diesem Arbeitsbereich im schreibgeschützten Modus.",
-        "confirm_button": "Teilen"
+        "confirm_button": "Arbeitsbereich teilen"
       },
       "messages": {
         "enabled": "Schreibgeschützter Arbeitsbereichslink aktiviert",
