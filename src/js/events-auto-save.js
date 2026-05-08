@@ -686,7 +686,8 @@ function triggerBackgroundPush() {
             'X-Requested-With': 'XMLHttpRequest'
         },
         body: JSON.stringify({
-            workspace: window.selectedWorkspace || (typeof getSelectedWorkspace === 'function' ? getSelectedWorkspace() : null)
+            workspace: window.selectedWorkspace || (typeof getSelectedWorkspace === 'function' ? getSelectedWorkspace() : null),
+            async: true
         }),
         keepalive: true
     })

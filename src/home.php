@@ -771,6 +771,32 @@ try {
         }
     }
 
+    async function readJsonResponse(response) {
+        const contentType = response.headers.get('content-type') || '';
+        const text = await response.text();
+
+        const looksLikeJson = text.trim().startsWith('{') || text.trim().startsWith('[');
+
+        if (contentType.includes('application/json') || looksLikeJson) {
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                throw new Error('Invalid JSON response from server.');
+            }
+
+            if (!response.ok) {
+                throw new Error(data.error || data.message || `HTTP ${response.status}`);
+            }
+
+            return data;
+        }
+
+        const plainText = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        const detail = plainText ? plainText.substring(0, 180) : `HTTP ${response.status}`;
+        throw new Error(detail || 'Unexpected server response.');
+    }
+
     function executeSync(card) {
         const action = card.querySelector('input[name="sync_action"]')?.value;
         const workspace = card.querySelector('input[name="workspace"]')?.value || "";
@@ -778,18 +804,42 @@ try {
 
         if (!action) return;
 
+        const syncStartTime = Math.floor(Date.now() / 1000);
+        let syncJobId = null;
+
         // Show progress bar modal
         const progressBar = window.modalAlert.showProgressBar(
             title, 
             "<?php echo addslashes(t_h('git_sync.starting', [], 'Syncing...')); ?>"
         );
 
+        let syncCompleted = false;
         let progressInterval = setInterval(async () => {
             try {
                 const response = await fetch('api/v1/git-sync/progress');
-                const data = await response.json();
+                const data = await readJsonResponse(response);
                 if (data.success && data.progress) {
                     progressBar.update(data.progress.percentage, data.progress.message);
+                }
+
+                const asyncResult = data.result;
+                const resultIsCurrent = asyncResult &&
+                    syncJobId &&
+                    asyncResult.id === syncJobId &&
+                    asyncResult.result &&
+                    asyncResult.action === action &&
+                    (!asyncResult.finished || asyncResult.finished >= syncStartTime);
+
+                if (data.success && resultIsCurrent) {
+                    syncCompleted = true;
+                    clearInterval(progressInterval);
+                    if (asyncResult.result.success) {
+                        progressBar.update(100, "<?php echo addslashes(t_h('git_sync.completed', [], 'Completed!')); ?>");
+                    }
+                    setTimeout(() => {
+                        progressBar.close();
+                        window.location.reload();
+                    }, 500);
                 }
             } catch (e) {
                 console.error("Error polling progress:", e);
@@ -802,12 +852,18 @@ try {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ workspace: workspace })
+            body: JSON.stringify({ workspace: workspace, async: true })
         })
-        .then(response => response.json())
+        .then(readJsonResponse)
         .then(data => {
+            if (data.started) {
+                syncJobId = data.id || null;
+                return;
+            }
+
+            syncCompleted = true;
             clearInterval(progressInterval);
-            
+
             if (data.success) {
                 progressBar.update(100, "<?php echo addslashes(t_h('git_sync.completed', [], 'Completed!')); ?>");
                 setTimeout(() => {
@@ -816,13 +872,15 @@ try {
                 }, 500);
             } else {
                 progressBar.close();
-                window.location.reload();
+                const message = data.error || data.message || data.errors?.[0]?.error || 'Sync failed.';
+                window.modalAlert.alert(message, 'error', title);
             }
         })
         .catch(err => {
+            if (syncCompleted) return;
             clearInterval(progressInterval);
             progressBar.close();
-            window.modalAlert.alert("Connection error: " + err.message, 'error', title);
+            window.modalAlert.alert("<?php echo addslashes(t_h('git_sync.messages.connection_error', ['error' => ''], 'Connection error: ')); ?>" + err.message, 'error', title);
         });
     }
 
