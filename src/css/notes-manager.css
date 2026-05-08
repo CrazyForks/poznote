@@ -620,4 +620,45 @@ body.dark-mode .nm-modal {
     .nm-bulk-actions           { width: 100%; }
     #nmBulkBar .nm-bulk-btn    { flex: 1 1 100%; justify-content: center; }
     .nm-bulk-select            { width: 100%; }
+
+    /* Fix note layout to keep checkbox and title/tags on the same line */
+    .nm-note-row {
+        flex-wrap: nowrap;
+        align-items: flex-start;
+        padding-top: 12px;
+        padding-bottom: 12px;
+    }
+    
+    .nm-note-checkbox {
+        margin-top: 3px;
+    }
+
+    .nm-note-title-wrap {
+        flex: 1;
+        min-width: 0;
+        display: grid;
+        grid-template-areas: 
+            "icon title"
+            ". tags";
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        gap: 0 8px;
+    }
+
+    .nm-note-type-icon {
+        grid-area: icon;
+    }
+
+    .nm-note-link {
+        grid-area: title;
+        white-space: normal;
+        line-height: 1.4;
+    }
+
+    .nm-note-tags {
+        grid-area: tags;
+        max-width: 100%;
+        margin-top: 4px;
+        justify-content: flex-start;
+    }
 }

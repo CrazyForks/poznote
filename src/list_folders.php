@@ -70,6 +70,9 @@ $currentLang = getUserLanguage();
 	<link type="text/css" rel="stylesheet" href="css/dark-mode/kanban.css"/>
 	<link type="text/css" rel="stylesheet" href="css/dark-mode/icons.css"/>
 	<style>
+		.shared-container {
+			background: transparent !important;
+		}
 		.folder-item {
 			cursor: pointer;
 			transition: background-color 0.2s;
@@ -86,6 +89,9 @@ $currentLang = getUserLanguage();
 		
 		/* Mobile simplification: list style instead of cards */
 		@media (max-width: 768px) {
+			.shared-container {
+				padding: 10px !important;
+			}
 			.folder-item {
 				padding: 12px 15px !important;
 				box-shadow: none !important;
@@ -93,10 +99,16 @@ $currentLang = getUserLanguage();
 				border: none !important;
 				border-bottom: 1px solid var(--border-color, #e0e0e0) !important;
 				margin-bottom: 0 !important;
+				background-color: transparent !important;
+			}
+			html[data-theme='dark'] .folder-item,
+			body.dark-mode .folder-item {
+				border-bottom-color: rgba(255, 255, 255, 0.1) !important;
 			}
 			.shared-folder-icon {
 				width: 32px !important;
 				height: 32px !important;
+				background: transparent !important;
 			}
 			.folder-name-text {
 				font-size: 14px !important;
@@ -154,11 +166,11 @@ $currentLang = getUserLanguage();
 				
 				$kanban_url = 'index.php?kanban=' . $folder_id . '&workspace=' . urlencode($workspace);
 				
-				echo '<div class="shared-note-item folder-item" onclick="window.location.href=\'' . $kanban_url . '\'" data-folder-name="' . $folder_name . '" style="cursor: pointer; padding: 15px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;">';
+				echo '<div class="shared-note-item folder-item" onclick="window.location.href=\'' . $kanban_url . '\'" data-folder-name="' . $folder_name . '" style="cursor: pointer; padding: 15px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; box-shadow: none !important;">';
 				
 				echo '<div class="note-name-container" style="display: flex; align-items: center; gap: 12px; flex: 1;">';
 				$icon_style = $icon_color ? 'style="color: ' . $icon_color . ' !important;"' : '';
-				echo '<div class="shared-folder-icon" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--icon-bg, rgba(0, 123, 255, 0.1)); border-radius: 8px;">';
+				echo '<div class="shared-folder-icon" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: transparent !important; border-radius: 8px;">';
 				echo '<i class="' . $folder_icon . '" ' . $icon_style . '></i>';
 				echo '</div>';
 				echo '<span class="folder-name-text" style="font-weight: 500; font-size: 16px; color: var(--text-color, var(--dm-text, #333333));">' . $folder_name . ' <span style="font-size: 14px; color: var(--text-muted, var(--dm-text-muted, #6c757d)); font-weight: 400;">(' . $note_count . ')</span></span>';
