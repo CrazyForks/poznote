@@ -366,9 +366,9 @@
             <select id="moveTargetSelect">
             </select>
         </div>
-        <div class="buttons-with-margin">
-            <button id="confirmMoveBtn" class="btn btn-primary"><?php echo t_h('workspaces.actions.move_notes', [], 'Move notes'); ?></button>
+        <div class="buttons-with-margin" style="display: flex; justify-content: flex-end; gap: 8px;">
             <button data-action="close-move-modal" class="btn btn-secondary"><?php echo t_h('common.cancel'); ?></button>
+            <button id="confirmMoveBtn" class="btn btn-primary"><?php echo t_h('workspaces.actions.move_notes', [], 'Move notes'); ?></button>
         </div>
     </div>
 </div>

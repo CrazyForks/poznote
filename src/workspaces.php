@@ -429,42 +429,72 @@ if ($_POST) {
             $updTrashed = $con->prepare('UPDATE entries SET workspace = ? WHERE workspace = ? AND trash != 0');
             $updTrashed->execute([$target, $name]);
 
-            // Remap folder_id for moved notes to match folders in destination workspace
-            // Instead of moving folders (which causes UNIQUE constraint violation),
-            // we update folder_id to point to existing folders in target workspace
+            // Remap folder_id for moved notes to match folders in destination workspace,
+            // preserving the full parent-child hierarchy.
             try {
-                // Get mapping of folder names to IDs in source workspace
-                $sourceFolders = [];
-                $srcStmt = $con->prepare('SELECT id, name FROM folders WHERE workspace = ?');
+                // Fetch all source folders with their hierarchy
+                $sourceFolders = []; // id => [name, parent_id, icon, icon_color]
+                $srcStmt = $con->prepare('SELECT id, name, parent_id, icon, icon_color FROM folders WHERE workspace = ?');
                 $srcStmt->execute([$name]);
                 while ($row = $srcStmt->fetch(PDO::FETCH_ASSOC)) {
-                    $sourceFolders[(int)$row['id']] = $row['name'];
+                    $sourceFolders[(int)$row['id']] = [
+                        'name'       => $row['name'],
+                        'parent_id'  => $row['parent_id'] !== null ? (int)$row['parent_id'] : null,
+                        'icon'       => $row['icon'],
+                        'icon_color' => $row['icon_color'],
+                    ];
                 }
 
-                // Get mapping of folder names to IDs in target workspace
-                $targetFolders = [];
-                $tgtStmt = $con->prepare('SELECT id, name FROM folders WHERE workspace = ?');
-                $tgtStmt->execute([$target]);
-                while ($row = $tgtStmt->fetch(PDO::FETCH_ASSOC)) {
-                    $targetFolders[$row['name']] = (int)$row['id'];
-                }
-
-                // For each source folder, find or create corresponding folder in target
-                $folderIdMap = []; // source_id => target_id
-                $insertFolder = $con->prepare('INSERT OR IGNORE INTO folders (name, workspace) VALUES (?, ?)');
-                $getNewId = $con->prepare('SELECT id FROM folders WHERE name = ? AND workspace = ?');
-                
-                foreach ($sourceFolders as $srcId => $folderName) {
-                    if (isset($targetFolders[$folderName])) {
-                        // Folder already exists in target
-                        $folderIdMap[$srcId] = $targetFolders[$folderName];
+                // Build a tree so we can insert parents before children
+                $children = []; // parent_id => [child_ids...]
+                $roots    = [];
+                foreach ($sourceFolders as $srcId => $data) {
+                    $pid = $data['parent_id'];
+                    if ($pid === null || !isset($sourceFolders[$pid])) {
+                        $roots[] = $srcId;
                     } else {
-                        // Create folder in target workspace
-                        $insertFolder->execute([$folderName, $target]);
-                        $getNewId->execute([$folderName, $target]);
-                        $newId = $getNewId->fetchColumn();
-                        if ($newId) {
-                            $folderIdMap[$srcId] = (int)$newId;
+                        $children[$pid][] = $srcId;
+                    }
+                }
+
+                // BFS order: roots first, then their children, etc.
+                $ordered = [];
+                $queue   = $roots;
+                while (!empty($queue)) {
+                    $cur = array_shift($queue);
+                    $ordered[] = $cur;
+                    if (!empty($children[$cur])) {
+                        foreach ($children[$cur] as $childId) {
+                            $queue[] = $childId;
+                        }
+                    }
+                }
+
+                $folderIdMap     = []; // source_id => target_id
+                $insertFolder    = $con->prepare('INSERT OR IGNORE INTO folders (name, workspace, parent_id, icon, icon_color) VALUES (?, ?, ?, ?, ?)');
+                $getExistingId   = $con->prepare('SELECT id FROM folders WHERE name = ? AND workspace = ? AND (parent_id IS ? OR parent_id = ?)');
+                $lastInsertStmt  = null;
+
+                foreach ($ordered as $srcId) {
+                    $data = $sourceFolders[$srcId];
+
+                    // Map parent_id to the already-resolved target parent, or null for roots
+                    $srcParentId   = $data['parent_id'];
+                    $tgtParentId   = ($srcParentId !== null && isset($folderIdMap[$srcParentId]))
+                                     ? $folderIdMap[$srcParentId]
+                                     : null;
+
+                    // Try to find an existing folder with same name + parent in target
+                    $getExistingId->execute([$data['name'], $target, $tgtParentId, $tgtParentId]);
+                    $existingId = $getExistingId->fetchColumn();
+
+                    if ($existingId !== false) {
+                        $folderIdMap[$srcId] = (int)$existingId;
+                    } else {
+                        $insertFolder->execute([$data['name'], $target, $tgtParentId, $data['icon'], $data['icon_color']]);
+                        $newId = (int)$con->lastInsertId();
+                        if ($newId > 0) {
+                            $folderIdMap[$srcId] = $newId;
                         }
                     }
                 }
@@ -475,12 +505,11 @@ if ($_POST) {
                     $updFolderId->execute([$newId, $oldId, $target]);
                 }
 
-                // Delete empty folders from source workspace
+                // Delete folders from source workspace
                 $delFolders = $con->prepare('DELETE FROM folders WHERE workspace = ?');
                 $delFolders->execute([$name]);
             } catch (Exception $e) {
                 // Non-fatal: folder remapping failed but notes were moved
-                // Log error but don't fail the whole operation
                 error_log('Folder remapping failed during workspace move: ' . $e->getMessage());
             }
 
