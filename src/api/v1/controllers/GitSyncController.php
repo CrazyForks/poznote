@@ -10,6 +10,8 @@
  */
 
 class GitSyncController {
+    private const ASYNC_STALE_AFTER = 7200;
+
     private $con;
     
     public function __construct($con) {
@@ -84,8 +86,14 @@ class GitSyncController {
         }
         
         $input = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($input)) $input = [];
         $workspace = isset($input['workspace']) ? $input['workspace'] : null;
         if ($workspace === '') $workspace = null;
+
+        if (!empty($input['async'])) {
+            $this->startAsyncSync('push', $workspace);
+            return;
+        }
         
         $sync = new GitSync($this->con, $_SESSION['user_id'] ?? null);
         $result = $sync->pushNotes($workspace);
@@ -119,8 +127,14 @@ class GitSyncController {
         }
         
         $input = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($input)) $input = [];
         $workspace = isset($input['workspace']) ? $input['workspace'] : null;
         if ($workspace === '') $workspace = null;
+
+        if (!empty($input['async'])) {
+            $this->startAsyncSync('pull', $workspace);
+            return;
+        }
         
         $sync = new GitSync($this->con, $_SESSION['user_id'] ?? null);
         $result = $sync->pullNotes($workspace);
@@ -146,19 +160,175 @@ class GitSyncController {
         }
         
         $progress = $_SESSION['git_sync_progress'] ?? null;
+        $running = $_SESSION['git_sync_running'] ?? null;
+        $result = $_SESSION['git_sync_async_result'] ?? null;
+
+        $stateFile = $_SESSION['git_sync_state_file'] ?? null;
+        if (is_string($stateFile) && is_file($stateFile)) {
+            $state = $this->readAsyncStateFile($stateFile);
+            if (is_array($state)) {
+                $progress = array_key_exists('progress', $state) ? $state['progress'] : $progress;
+                $running = array_key_exists('running', $state) ? $state['running'] : $running;
+                $result = array_key_exists('result', $state) ? $state['result'] : $result;
+
+                if ($running && $this->isAsyncStateStale($state)) {
+                    $running = null;
+                    $result = [
+                        'id' => $state['running']['id'] ?? null,
+                        'action' => $state['running']['action'] ?? 'sync',
+                        'workspace' => $state['running']['workspace'] ?? null,
+                        'result' => [
+                            'success' => false,
+                            'errors' => [['error' => 'Git sync was interrupted or timed out.']]
+                        ],
+                        'finished' => time()
+                    ];
+                    $state['running'] = null;
+                    $state['result'] = $result;
+                    $this->writeAsyncStateFile($stateFile, $state);
+                }
+
+                if ($result && isset($result['action'], $result['result']) && array_key_exists('workspace', $result)) {
+                    $_SESSION['last_sync_result'] = [
+                        'action' => $result['action'],
+                        'workspace' => $result['workspace'],
+                        'result' => $result['result']
+                    ];
+                    $_SESSION['git_sync_async_result'] = $result;
+                    unset($_SESSION['git_sync_running'], $_SESSION['git_sync_state_file']);
+                    @unlink($stateFile);
+                }
+            }
+        }
         
-        // If progress is older than 30 seconds, consider it stale
-        if ($progress && (time() - ($progress['timestamp'] ?? 0) > 30)) {
+        // If progress is older than 5 minutes and no async job is marked running, consider it stale.
+        if (!$running && $progress && (time() - ($progress['timestamp'] ?? 0) > 300)) {
             unset($_SESSION['git_sync_progress']);
             $progress = null;
         }
         
         echo json_encode([
             'success' => true,
-            'progress' => $progress
+            'progress' => $progress,
+            'running' => $running,
+            'result' => $result
         ]);
         
         session_write_close();
+    }
+
+    private function startAsyncSync(string $action, ?string $workspace): void {
+        if (!function_exists('fastcgi_finish_request')) {
+            $sync = new GitSync($this->con, $_SESSION['user_id'] ?? null);
+            $result = $action === 'push' ? $sync->pushNotes($workspace) : $sync->pullNotes($workspace);
+            $this->storeSyncResult($action, $workspace, $result);
+            echo json_encode($result);
+            return;
+        }
+
+        ignore_user_abort(true);
+        set_time_limit(0);
+
+        if (session_status() === PHP_SESSION_NONE) session_start();
+        $stateFile = $this->getAsyncStateFile();
+
+        $existingState = $this->readAsyncStateFile($stateFile);
+        if ($existingState && !empty($existingState['running']) && !$this->isAsyncStateStale($existingState)) {
+            http_response_code(409);
+            echo json_encode([
+                'success' => false,
+                'error' => 'A Git sync is already running.',
+                'running' => $existingState['running']
+            ]);
+            session_write_close();
+            return;
+        }
+
+        $jobId = bin2hex(random_bytes(12));
+        $running = [
+            'id' => $jobId,
+            'action' => $action,
+            'workspace' => $workspace,
+            'started' => time()
+        ];
+
+        $this->writeAsyncStateFile($stateFile, [
+            'running' => $running,
+            'progress' => null,
+            'result' => null
+        ]);
+        unset($_SESSION['git_sync_progress'], $_SESSION['git_sync_async_result']);
+        $_SESSION['git_sync_state_file'] = $stateFile;
+        $_SESSION['git_sync_running'] = $running;
+        session_write_close();
+
+        echo json_encode([
+            'success' => true,
+            'started' => true,
+            'action' => $action,
+            'id' => $jobId
+        ]);
+        fastcgi_finish_request();
+
+        $sync = new GitSync($this->con, $_SESSION['user_id'] ?? null);
+        $sync->setProgressStateFile($stateFile);
+        $result = $action === 'push' ? $sync->pushNotes($workspace) : $sync->pullNotes($workspace);
+        $this->storeAsyncFileResult($stateFile, $jobId, $action, $workspace, $result);
+    }
+
+    private function storeSyncResult(string $action, ?string $workspace, array $result): void {
+        if (session_status() === PHP_SESSION_NONE) session_start();
+        $_SESSION['last_sync_result'] = [
+            'action' => $action,
+            'workspace' => $workspace,
+            'result' => $result
+        ];
+        $_SESSION['git_sync_async_result'] = [
+            'action' => $action,
+            'workspace' => $workspace,
+            'result' => $result,
+            'finished' => time()
+        ];
+        unset($_SESSION['git_sync_running']);
+        session_write_close();
+    }
+
+    private function storeAsyncFileResult(string $stateFile, string $jobId, string $action, ?string $workspace, array $result): void {
+        $state = $this->readAsyncStateFile($stateFile) ?: [];
+
+        $state['running'] = null;
+        $state['result'] = [
+            'id' => $jobId,
+            'action' => $action,
+            'workspace' => $workspace,
+            'result' => $result,
+            'finished' => time()
+        ];
+        $this->writeAsyncStateFile($stateFile, $state);
+    }
+
+    private function getAsyncStateFile(): string {
+        $sessionId = session_id() ?: bin2hex(random_bytes(16));
+        return rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'poznote_git_sync_' . hash('sha256', $sessionId) . '.json';
+    }
+
+    private function readAsyncStateFile(string $stateFile): array {
+        if (!is_file($stateFile)) return [];
+        $decoded = json_decode((string) @file_get_contents($stateFile), true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function writeAsyncStateFile(string $stateFile, array $state): void {
+        $tmpFile = $stateFile . '.' . getmypid() . '.tmp';
+        @file_put_contents($tmpFile, json_encode($state), LOCK_EX);
+        @rename($tmpFile, $stateFile);
+    }
+
+    private function isAsyncStateStale(array $state): bool {
+        $progressTimestamp = (int) ($state['progress']['timestamp'] ?? 0);
+        $startedTimestamp = (int) ($state['running']['started'] ?? 0);
+        $lastActivity = max($progressTimestamp, $startedTimestamp);
+        return $lastActivity > 0 && (time() - $lastActivity) > self::ASYNC_STALE_AFTER;
     }
     
     /**

@@ -20,6 +20,7 @@ class GitSync {
     private $provider;
     private $apiBase;
     private $con;
+    private $progressStateFile = null;
 
     /**
      * Get the configured git provider (github, forgejo, etc.)
@@ -205,6 +206,22 @@ class GitSync {
         return !empty($settings['git_token']) || !empty($settings['git_repo']);
     }
 
+    public function setProgressStateFile(?string $path): void {
+        $this->progressStateFile = $path;
+    }
+
+    private function writeProgressState(array $state): void {
+        if (!$this->progressStateFile) return;
+        $existing = [];
+        if (is_file($this->progressStateFile)) {
+            $decoded = json_decode((string) @file_get_contents($this->progressStateFile), true);
+            if (is_array($decoded)) $existing = $decoded;
+        }
+        $tmpFile = $this->progressStateFile . '.' . getmypid() . '.tmp';
+        @file_put_contents($tmpFile, json_encode(array_merge($existing, $state)), LOCK_EX);
+        @rename($tmpFile, $this->progressStateFile);
+    }
+
     /**
      * Update sync progress in session
      * @param int $current Current item being processed
@@ -212,17 +229,24 @@ class GitSync {
      * @param string $message Action message
      */
     public function updateProgress($current, $total, $message = '') {
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
-        }
-        
-        $_SESSION['git_sync_progress'] = [
+        $progress = [
             'current' => $current,
             'total' => $total,
             'percentage' => $total > 0 ? min(100, round(($current / $total) * 100)) : 0,
             'message' => $message,
             'timestamp' => time()
         ];
+
+        if ($this->progressStateFile) {
+            $this->writeProgressState(['progress' => $progress]);
+            return;
+        }
+
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+        
+        $_SESSION['git_sync_progress'] = $progress;
         
         // Write and close to release lock for other potential requests (polling)
         session_write_close();
@@ -232,6 +256,11 @@ class GitSync {
      * Clear progress from session
      */
     public function clearProgress() {
+        if ($this->progressStateFile) {
+            $this->writeProgressState(['progress' => null]);
+            return;
+        }
+
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }
@@ -607,30 +636,51 @@ class GitSync {
             // ── 1. Build remote SHA map ──
             $tree   = $this->getRepoTree();
             $shaMap = [];
-            if (isset($tree) && is_array($tree) && !isset($tree['error'])) {
-                foreach ($tree as $item) {
-                    if ($item['type'] === 'blob') $shaMap[$item['path']] = $item['sha'];
-                }
+            if (isset($tree['error'])) {
+                $results['success'] = false;
+                $results['errors'][] = ['path' => 'repository_tree', 'error' => $tree['error']];
+                return $results;
+            }
+
+            foreach ($tree as $item) {
+                if ($item['type'] === 'blob') $shaMap[$item['path']] = $item['sha'];
             }
 
             // ── 2. Scan local directories ──
             $entryFiles      = is_dir($entriesPath)     ? array_values(array_filter(array_diff(scandir($entriesPath),     ['.', '..']), fn($f) => is_file($entriesPath     . '/' . $f))) : [];
             $attachmentFiles = is_dir($attachmentsPath) ? array_values(array_filter(array_diff(scandir($attachmentsPath), ['.', '..']), fn($f) => is_file($attachmentsPath . '/' . $f))) : [];
 
-            $totalSteps  = count($entryFiles) + count($attachmentFiles) + 5;
+            $expectedPathSet = ['metadata.json' => true];
+            foreach ($entryFiles as $filename) {
+                $expectedPathSet['entries/' . $filename] = true;
+            }
+            foreach ($attachmentFiles as $filename) {
+                $expectedPathSet['attachments/' . $filename] = true;
+            }
+
+            $orphanPaths = [];
+            foreach ($shaMap as $remotePath => $_sha) {
+                if (!isset($expectedPathSet[$remotePath])) {
+                    $orphanPaths[$remotePath] = $_sha;
+                }
+            }
+
+            $totalSteps  = count($entryFiles) + count($attachmentFiles) + count($orphanPaths) + 1;
             $currentStep = 0;
             $this->updateProgress(0, $totalSteps, 'Starting push...');
-
-            $expectedPaths = [];
 
             // ── 3. Push entries/ ──
             foreach ($entryFiles as $filename) {
                 $currentStep++;
                 $this->updateProgress($currentStep, $totalSteps, "Pushing: {$filename}");
 
-                $repoPath        = 'entries/' . $filename;
-                $expectedPaths[] = $repoPath;
-                $content         = file_get_contents($entriesPath . '/' . $filename);
+                $repoPath = 'entries/' . $filename;
+                $content  = file_get_contents($entriesPath . '/' . $filename);
+                if ($content === false) {
+                    $results['errors'][] = ['path' => $repoPath, 'error' => 'Unable to read local file'];
+                    $results['debug'][]  = "  {$repoPath} → ERROR: unable to read local file";
+                    continue;
+                }
 
                 $pushResult = $this->pushFile($repoPath, $content, "Update: {$filename}", $shaMap);
                 if ($pushResult['success']) {
@@ -652,13 +702,18 @@ class GitSync {
                 $currentStep++;
                 $this->updateProgress($currentStep, $totalSteps, "Pushing attachment: {$filename}");
 
-                $repoPath        = 'attachments/' . $filename;
-                $expectedPaths[] = $repoPath;
-                $content         = file_get_contents($attachmentsPath . '/' . $filename);
+                $repoPath = 'attachments/' . $filename;
+                $content  = file_get_contents($attachmentsPath . '/' . $filename);
+                if ($content === false) {
+                    $results['errors'][] = ['path' => $repoPath, 'error' => 'Unable to read local file'];
+                    $results['debug'][]  = "  {$repoPath} → ERROR: unable to read local file";
+                    continue;
+                }
 
                 $pushResult = $this->pushFile($repoPath, $content, "Update attachment: {$filename}", $shaMap);
                 if ($pushResult['success']) {
                     if (!empty($pushResult['skipped'])) {
+                        $results['skipped']++;
                         $results['debug'][] = "  {$repoPath} → unchanged";
                     } else {
                         $results['attachments_pushed']++;
@@ -673,8 +728,8 @@ class GitSync {
             }
 
             // ── 5. Push metadata.json ──
+            $currentStep++;
             $this->updateProgress($currentStep, $totalSteps, 'Pushing metadata...');
-            $expectedPaths[] = 'metadata.json';
             $metaResult = $this->pushMetadata($shaMap);
             if ($metaResult['success']) {
                 if (empty($metaResult['skipped'])) {
@@ -688,20 +743,18 @@ class GitSync {
                 $results['debug'][]  = '  metadata.json → ERROR: ' . ($metaResult['error'] ?? 'unknown');
             }
 
-            // ── 6. Delete remote orphans ──
+            // ── 5b. Delete remote orphans ──
             $this->updateProgress($currentStep, $totalSteps, 'Cleaning up remote orphans...');
-            foreach ($shaMap as $remotePath => $_sha) {
-                if (!in_array($remotePath, $expectedPaths)) {
-                    $currentStep++;
-                    $this->updateProgress($currentStep, $totalSteps, "Deleting: {$remotePath}");
-                    $delResult = $this->deleteFile($remotePath, 'Deleted from Poznote');
-                    if ($delResult['success']) {
-                        $results['deleted']++;
-                        $results['debug'][] = "  {$remotePath} → deleted";
-                    } else {
-                        $results['errors'][] = ['path' => $remotePath, 'error' => $delResult['error']];
-                        $results['debug'][]  = "  {$remotePath} → delete ERROR: " . $delResult['error'];
-                    }
+            foreach ($orphanPaths as $remotePath => $remoteSha) {
+                $currentStep++;
+                $this->updateProgress($currentStep, $totalSteps, "Deleting: {$remotePath}");
+                $delResult = $this->deleteFile($remotePath, 'Deleted from Poznote', $remoteSha);
+                if ($delResult['success']) {
+                    $results['deleted']++;
+                    $results['debug'][] = "  {$remotePath} → deleted";
+                } else {
+                    $results['errors'][] = ['path' => $remotePath, 'error' => $delResult['error']];
+                    $results['debug'][]  = "  {$remotePath} → delete ERROR: " . $delResult['error'];
                 }
             }
 
@@ -750,6 +803,7 @@ class GitSync {
             'pulled' => 0,
             'updated' => 0,
             'deleted' => 0,
+            'unchanged' => 0,
             'errors' => [],
             'debug' => []
         ];
@@ -763,16 +817,20 @@ class GitSync {
             $tree = $this->getRepoTree();
             
             if (isset($tree['error'])) {
-                return ['success' => false, 'error' => $tree['error']];
+                $results['success'] = false;
+                $results['errors'][] = ['path' => 'repository_tree', 'error' => $tree['error']];
+                return $results;
             }
 
             // ── 2. Categorise remote files ──
             $noteFiles       = [];   // ['entries/183.html', ...]
             $attachmentFiles = [];   // ['attachments/foo.png', ...]
+            $remoteShaMap    = [];
             $hasMetadata     = false;
             foreach ($tree as $item) {
                 if ($item['type'] !== 'blob') continue;
                 $path = $item['path'];
+                if (isset($item['sha'])) $remoteShaMap[$path] = $item['sha'];
                 if ($path === 'metadata.json') {
                     $hasMetadata = true;
                 } elseif (strpos($path, 'entries/') === 0) {
@@ -835,22 +893,23 @@ class GitSync {
                 // Insert in multiple passes: root folders first, then children
                 $toInsert = $foldersSource;
                 $maxPasses = 10;
+                $folderParentStmt = $this->con->prepare('SELECT id FROM folders WHERE id = ?');
+                $folderInsertStmt = $this->con->prepare(
+                    'INSERT OR IGNORE INTO folders (id, name, workspace, parent_id, icon, icon_color) VALUES (?, ?, ?, ?, ?, ?)'
+                );
                 while (!empty($toInsert) && $maxPasses-- > 0) {
                     $remaining = [];
                     foreach ($toInsert as $folder) {
                         // If it has a parent, make sure the parent exists first
                         if ($folder['parent_id'] !== null) {
-                            $chk = $this->con->prepare('SELECT id FROM folders WHERE id = ?');
-                            $chk->execute([$folder['parent_id']]);
-                            if ($chk->fetchColumn() === false) {
+                            $folderParentStmt->execute([$folder['parent_id']]);
+                            if ($folderParentStmt->fetchColumn() === false) {
                                 $remaining[] = $folder; // parent not yet inserted, retry later
                                 continue;
                             }
                         }
                         // INSERT OR IGNORE preserves existing folders
-                        $this->con->prepare(
-                            'INSERT OR IGNORE INTO folders (id, name, workspace, parent_id, icon, icon_color) VALUES (?, ?, ?, ?, ?, ?)'
-                        )->execute([
+                        $folderInsertStmt->execute([
                             $folder['id'],
                             $folder['name'],
                             $folder['workspace'] ?? 'Poznote',
@@ -870,13 +929,14 @@ class GitSync {
             $pulledNoteIds = [];
 
             // ── 3a. Download all entries (HTTP phase — no DB involvement) ──
-            $downloadedNotes = []; // ['noteId' => int, 'filename' => string, 'content' => string]
+            $downloadedNotes = []; // ['noteId' => int, 'filename' => string, 'filePath' => string]
+            $unchangedNotes = []; // same shape, local content already matches remote SHA
             try {
                 if (!is_dir($entriesPath)) mkdir($entriesPath, 0755, true);
                 foreach ($noteFiles as $path) {
                     $currentStep++;
                     $filename = basename($path);
-                    $this->updateProgress($currentStep, $totalSteps, "Downloading: {$filename}");
+                    $this->updateProgress($currentStep, $totalSteps, "Checking: {$filename}");
 
                     $noteId = (int) pathinfo($filename, PATHINFO_FILENAME);
                     if ($noteId <= 0) {
@@ -884,6 +944,19 @@ class GitSync {
                         continue;
                     }
 
+                    $localEntryFile = $entriesPath . '/' . $filename;
+                    $remoteSha = $remoteShaMap[$path] ?? null;
+                    if ($remoteSha && is_file($localEntryFile)) {
+                        $localSha = $this->calculateGitFileSha($localEntryFile);
+                        if ($localSha === $remoteSha) {
+                            $this->updateProgress($currentStep, $totalSteps, "Unchanged: {$filename}");
+                            $results['debug'][] = "  {$filename} → unchanged, using local copy";
+                            $unchangedNotes[] = ['noteId' => $noteId, 'filename' => $filename, 'filePath' => $localEntryFile];
+                            continue;
+                        }
+                    }
+
+                    $this->updateProgress($currentStep, $totalSteps, "Downloading: {$filename}");
                     $raw = $this->getFileContent($path);
                     if (isset($raw['error'])) {
                         $results['errors'][] = ['path' => $path, 'error' => $raw['error']];
@@ -892,18 +965,26 @@ class GitSync {
                     }
 
                     // Write to disk immediately
-                    file_put_contents($entriesPath . '/' . $filename, $raw['content']);
-                    $downloadedNotes[] = ['noteId' => $noteId, 'filename' => $filename, 'content' => $raw['content']];
+                    file_put_contents($localEntryFile, $raw['content']);
+                    $downloadedNotes[] = ['noteId' => $noteId, 'filename' => $filename, 'filePath' => $localEntryFile];
                 }
             } catch (Exception $e) {
                 $results['errors'][] = ['path' => 'download_loop', 'error' => $e->getMessage()];
                 $results['debug'][]  = 'Error during download loop: ' . $e->getMessage();
             }
 
+            // Populate pulledNoteIds from file lists before the transaction so that a
+            // mid-transaction DB exception + ROLLBACK cannot cause existing notes to be
+            // wrongly trashed in the cleanup step.
+            $pulledNoteIds = array_merge(
+                array_column($downloadedNotes, 'noteId'),
+                array_column($unchangedNotes, 'noteId')
+            );
+
             // ── 3b. Upsert all downloaded entries in a single transaction ──
             // A single BEGIN IMMEDIATE acquires the write lock once, avoiding hundreds of
             // lock-upgrade races that cause SQLITE_BUSY with many concurrent requests.
-            if (!empty($downloadedNotes)) {
+            if (!empty($downloadedNotes) || !empty($unchangedNotes)) {
                 try {
                     $this->con->exec('BEGIN IMMEDIATE');
 
@@ -911,24 +992,32 @@ class GitSync {
                     $existingIds = $this->con->query('SELECT id FROM entries')->fetchAll(PDO::FETCH_COLUMN, 0);
                     $existingIds = array_flip($existingIds); // key = id for O(1) lookup
 
+                    $appendMetadataFields = function (array &$setClauses, array &$params, array $meta, bool $defaultUpdated): void {
+                        if ($defaultUpdated || isset($meta['updated'])) { $setClauses[] = 'updated = ?'; $params[] = $meta['updated'] ?? gmdate('Y-m-d H:i:s'); }
+                        if (isset($meta['heading']))     { $setClauses[] = 'heading = ?';     $params[] = $meta['heading']; }
+                        if (isset($meta['tags']))        { $setClauses[] = 'tags = ?';        $params[] = $meta['tags']; }
+                        if (isset($meta['folder_id']))   { $setClauses[] = 'folder_id = ?';   $params[] = $meta['folder_id']; }
+                        if (isset($meta['folder']))      { $setClauses[] = 'folder = ?';      $params[] = $meta['folder']; }
+                        if (isset($meta['workspace']))   { $setClauses[] = 'workspace = ?';   $params[] = $meta['workspace']; }
+                        if (isset($meta['type']))        { $setClauses[] = 'type = ?';        $params[] = $meta['type']; }
+                        if (isset($meta['attachments'])) { $setClauses[] = 'attachments = ?'; $params[] = $meta['attachments']; }
+                        if (isset($meta['favorite']))    { $setClauses[] = 'favorite = ?';    $params[] = (int) $meta['favorite']; }
+                        if (isset($meta['created']))     { $setClauses[] = 'created = ?';     $params[] = $meta['created']; }
+                    };
+
                     foreach ($downloadedNotes as $note) {
                         $noteId   = $note['noteId'];
                         $filename = $note['filename'];
-                        $content  = $note['content'];
+                        $content  = file_get_contents($note['filePath']);
+                        if ($content === false) {
+                            throw new Exception("Unable to read downloaded note file: {$filename}");
+                        }
                         $meta     = $metadata[(string) $noteId] ?? [];
 
                         if (isset($existingIds[$noteId])) {
-                            $setClauses = ['entry = ?', 'trash = 0', 'updated = ?'];
-                            $params     = [$content, $meta['updated'] ?? gmdate('Y-m-d H:i:s')];
-                            if (isset($meta['heading']))     { $setClauses[] = 'heading = ?';     $params[] = $meta['heading']; }
-                            if (isset($meta['tags']))        { $setClauses[] = 'tags = ?';        $params[] = $meta['tags']; }
-                            if (isset($meta['folder_id']))   { $setClauses[] = 'folder_id = ?';   $params[] = $meta['folder_id']; }
-                            if (isset($meta['folder']))      { $setClauses[] = 'folder = ?';      $params[] = $meta['folder']; }
-                            if (isset($meta['workspace']))   { $setClauses[] = 'workspace = ?';   $params[] = $meta['workspace']; }
-                            if (isset($meta['type']))        { $setClauses[] = 'type = ?';        $params[] = $meta['type']; }
-                            if (isset($meta['attachments'])) { $setClauses[] = 'attachments = ?'; $params[] = $meta['attachments']; }
-                            if (isset($meta['favorite']))    { $setClauses[] = 'favorite = ?';    $params[] = (int) $meta['favorite']; }
-                            if (isset($meta['created']))     { $setClauses[] = 'created = ?';     $params[] = $meta['created']; }
+                            $setClauses = ['entry = ?', 'trash = 0'];
+                            $params     = [$content];
+                            $appendMetadataFields($setClauses, $params, $meta, true);
                             $params[] = $noteId;
                             $this->con->prepare('UPDATE entries SET ' . implode(', ', $setClauses) . ' WHERE id = ?')
                                       ->execute($params);
@@ -952,7 +1041,42 @@ class GitSync {
                             $results['pulled']++;
                             $results['debug'][] = "  {$filename} → created (heading: {$heading})";
                         }
-                        $pulledNoteIds[] = $noteId;
+                    }
+
+                    foreach ($unchangedNotes as $note) {
+                        $noteId   = $note['noteId'];
+                        $filename = $note['filename'];
+                        $meta     = $metadata[(string) $noteId] ?? [];
+
+                        if (isset($existingIds[$noteId])) {
+                            $setClauses = ['trash = 0'];
+                            $params     = [];
+                            $appendMetadataFields($setClauses, $params, $meta, false);
+                            $params[] = $noteId;
+                            $this->con->prepare('UPDATE entries SET ' . implode(', ', $setClauses) . ' WHERE id = ?')
+                                      ->execute($params);
+                            $results['unchanged']++;
+                        } else {
+                            $content = file_get_contents($note['filePath']);
+                            if ($content === false) {
+                                throw new Exception("Unable to read unchanged note file: {$filename}");
+                            }
+                            $ext         = pathinfo($filename, PATHINFO_EXTENSION);
+                            $type        = $meta['type']        ?? (($ext === 'md') ? 'markdown' : 'note');
+                            $heading     = $meta['heading']     ?? $this->extractHeadingFromContent($content, $ext);
+                            $tags        = $meta['tags']        ?? '';
+                            $folderId    = $meta['folder_id']   ?? null;
+                            $folder      = $meta['folder']      ?? 'Default';
+                            $workspace   = $meta['workspace']   ?? 'Poznote';
+                            $attachments = $meta['attachments'] ?? null;
+                            $favorite    = (int) ($meta['favorite'] ?? 0);
+                            $created     = $meta['created']     ?? gmdate('Y-m-d H:i:s');
+                            $updated     = $meta['updated']     ?? gmdate('Y-m-d H:i:s');
+                            $this->con->prepare(
+                                'INSERT INTO entries (id, heading, entry, type, workspace, tags, folder_id, folder, attachments, favorite, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                            )->execute([$noteId, $heading, $content, $type, $workspace, $tags, $folderId, $folder, $attachments, $favorite, $created, $updated]);
+                            $results['pulled']++;
+                        }
                     }
 
                     $this->con->exec('COMMIT');
@@ -971,9 +1095,14 @@ class GitSync {
                 $filename  = basename($path);
                 $localFile = $attachmentsPath . '/' . $filename;
                 if (file_exists($localFile)) {
-                    $this->updateProgress($currentStep, $totalSteps, "Attachment exists: {$filename}");
-                    $results['debug'][] = "  Attachment already exists: {$filename}";
-                    continue;
+                    $remoteSha = $remoteShaMap[$path] ?? null;
+                    $localSha = $remoteSha ? $this->calculateGitFileSha($localFile) : null;
+                    if ($remoteSha && $localSha === $remoteSha) {
+                        $this->updateProgress($currentStep, $totalSteps, "Attachment unchanged: {$filename}");
+                        $results['unchanged']++;
+                        $results['debug'][] = "  Attachment unchanged: {$filename}";
+                        continue;
+                    }
                 }
                 $this->updateProgress($currentStep, $totalSteps, "Downloading attachment: {$filename}");
                 $raw = $this->getFileContent($path);
@@ -990,9 +1119,10 @@ class GitSync {
             $this->updateProgress($currentStep, $totalSteps, 'Cleaning up local notes...');
             try {
                 $localIds = $this->con->query('SELECT id FROM entries WHERE trash = 0')->fetchAll(PDO::FETCH_COLUMN);
+                $pulledNoteSet = array_fill_keys(array_map('intval', $pulledNoteIds), true);
                 $toTrash = [];
                 foreach ($localIds as $localId) {
-                    if (!in_array((int) $localId, $pulledNoteIds)) {
+                    if (!isset($pulledNoteSet[(int) $localId])) {
                         $toTrash[] = (int) $localId;
                     }
                 }
@@ -1020,6 +1150,7 @@ class GitSync {
                 'pulled'    => $results['pulled'],
                 'updated'   => $results['updated'],
                 'deleted'   => $results['deleted'],
+                'unchanged' => $results['unchanged'],
                 'errors'    => count($results['errors']),
             ]);
             $this->clearProgress();
@@ -1039,22 +1170,26 @@ class GitSync {
      * @param string $message Commit message
      * @return array Result with success status and error if applicable
      */
-    private function deleteFile($path, $message) {
+    private function deleteFile($path, $message, $sha = null) {
         $encodedPath = implode('/', array_map('rawurlencode', explode('/', $path)));
         
         // Get the file to retrieve its SHA (required for deletion)
-        $existingFile = $this->apiRequest('GET', "/repos/{$this->repo}/contents/{$encodedPath}?ref={$this->branch}");
-        
-        if (!isset($existingFile['sha'])) {
-            return [
-                'success' => false,
-                'error' => 'File not found or unable to get SHA'
-            ];
+        if ($sha === null) {
+            $existingFile = $this->apiRequest('GET', "/repos/{$this->repo}/contents/{$encodedPath}?ref={$this->branch}");
+            
+            if (!isset($existingFile['sha'])) {
+                return [
+                    'success' => false,
+                    'error' => 'File not found or unable to get SHA'
+                ];
+            }
+
+            $sha = $existingFile['sha'];
         }
         
         $body = [
             'message' => $message,
-            'sha' => $existingFile['sha'],
+            'sha' => $sha,
             'branch' => $this->branch,
             'committer' => [
                 'name' => $this->authorName,
@@ -1079,6 +1214,28 @@ class GitSync {
      */
     private function calculateGitSha($content) {
         return sha1("blob " . strlen($content) . "\0" . $content);
+    }
+
+    private function calculateGitFileSha($filePath) {
+        $size = filesize($filePath);
+        if ($size === false) return null;
+
+        $handle = fopen($filePath, 'rb');
+        if ($handle === false) return null;
+
+        $context = hash_init('sha1');
+        hash_update($context, "blob " . $size . "\0");
+        while (!feof($handle)) {
+            $chunk = fread($handle, 1024 * 1024);
+            if ($chunk === false) {
+                fclose($handle);
+                return null;
+            }
+            hash_update($context, $chunk);
+        }
+        fclose($handle);
+
+        return hash_final($context);
     }
     
     /**
