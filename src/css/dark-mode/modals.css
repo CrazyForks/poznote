@@ -853,3 +853,20 @@ html[data-theme='dark'] #snapshotModal .snapshot-date-btn [class*="lucide-"],
 body.dark-mode #snapshotModal .snapshot-date-btn [class*="lucide-"] {
     filter: none !important;
 }
+
+/* Update Modal Specific */
+html[data-theme='dark'] #updateModal .version-info,
+body.dark-mode #updateModal .version-info {
+    background-color: #2a2d32;
+    border: 1px solid #40444b;
+}
+
+html[data-theme='dark'] #updateModal .version-info p,
+body.dark-mode #updateModal .version-info p {
+    color: #e0e0e0;
+}
+
+html[data-theme='dark'] #updateModal .modal-content p,
+body.dark-mode #updateModal .modal-content p {
+    color: #bebebe;
+}

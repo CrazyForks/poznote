@@ -501,7 +501,7 @@
       "confirm": {
         "title": "Compartir espacio de trabajo en modo solo lectura",
         "message": "Cualquier persona con la URL del espacio de trabajo \"{{workspace}}\" tendrá acceso a todas las notas y carpetas de este espacio de trabajo en modo solo lectura.",
-        "confirm_button": "Compartir"
+        "confirm_button": "Compartir espacio de trabajo"
       },
       "messages": {
         "enabled": "Enlace de espacio de trabajo de solo lectura activado",

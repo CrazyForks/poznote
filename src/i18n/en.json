@@ -164,7 +164,7 @@
       "confirm": {
         "title": "Share workspace in read-only mode",
         "message": "Anyone with the URL for workspace \"{{workspace}}\" will have access to all notes and folders in this workspace in read-only mode.",
-        "confirm_button": "Share workspace in read-only mode"
+        "confirm_button": "Share workspace"
       },
       "messages": {
         "enabled": "Read-only workspace link enabled",
@@ -491,7 +491,7 @@
         "confirm": {
           "title": "Share workspace in read-only mode",
           "message": "Anyone with the URL for workspace \"{{workspace}}\" will have access to all notes and folders in this workspace in read-only mode.",
-          "confirm_button": "Share"
+          "confirm_button": "Share workspace"
         },
         "messages": {
           "enabled": "Read-only workspace link enabled",
