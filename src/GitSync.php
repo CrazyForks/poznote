@@ -869,10 +869,10 @@ class GitSync {
 
             $pulledNoteIds = [];
 
-            // ── 3. Download & upsert entries ──
-            // Uses BEGIN IMMEDIATE so SQLite acquires the write lock upfront and waits
-            // up to busy_timeout rather than failing on a deferred lock upgrade.
+            // ── 3a. Download all entries (HTTP phase — no DB involvement) ──
+            $downloadedNotes = []; // ['noteId' => int, 'filename' => string, 'content' => string]
             try {
+                if (!is_dir($entriesPath)) mkdir($entriesPath, 0755, true);
                 foreach ($noteFiles as $path) {
                     $currentStep++;
                     $filename = basename($path);
@@ -891,21 +891,33 @@ class GitSync {
                         continue;
                     }
 
-                    $content = $raw['content'];
+                    // Write to disk immediately
+                    file_put_contents($entriesPath . '/' . $filename, $raw['content']);
+                    $downloadedNotes[] = ['noteId' => $noteId, 'filename' => $filename, 'content' => $raw['content']];
+                }
+            } catch (Exception $e) {
+                $results['errors'][] = ['path' => 'download_loop', 'error' => $e->getMessage()];
+                $results['debug'][]  = 'Error during download loop: ' . $e->getMessage();
+            }
 
-                    // Write to disk
-                    if (!is_dir($entriesPath)) mkdir($entriesPath, 0755, true);
-                    file_put_contents($entriesPath . '/' . $filename, $content);
+            // ── 3b. Upsert all downloaded entries in a single transaction ──
+            // A single BEGIN IMMEDIATE acquires the write lock once, avoiding hundreds of
+            // lock-upgrade races that cause SQLITE_BUSY with many concurrent requests.
+            if (!empty($downloadedNotes)) {
+                try {
+                    $this->con->exec('BEGIN IMMEDIATE');
 
-                    // Upsert DB — BEGIN IMMEDIATE waits for the write lock (respects busy_timeout)
-                    // instead of failing with SQLITE_BUSY when upgrading a deferred transaction.
-                    try {
-                        $this->con->exec('BEGIN IMMEDIATE');
-                        $meta      = $metadata[(string) $noteId] ?? [];
-                        $checkStmt = $this->con->prepare('SELECT id FROM entries WHERE id = ?');
-                        $checkStmt->execute([$noteId]);
-                        if ($checkStmt->fetch()) {
-                            // Build dynamic UPDATE — apply metadata fields whenever available
+                    // Fetch all existing IDs in one query to avoid per-note SELECTs inside the loop
+                    $existingIds = $this->con->query('SELECT id FROM entries')->fetchAll(PDO::FETCH_COLUMN, 0);
+                    $existingIds = array_flip($existingIds); // key = id for O(1) lookup
+
+                    foreach ($downloadedNotes as $note) {
+                        $noteId   = $note['noteId'];
+                        $filename = $note['filename'];
+                        $content  = $note['content'];
+                        $meta     = $metadata[(string) $noteId] ?? [];
+
+                        if (isset($existingIds[$noteId])) {
                             $setClauses = ['entry = ?', 'trash = 0', 'updated = ?'];
                             $params     = [$content, $meta['updated'] ?? gmdate('Y-m-d H:i:s')];
                             if (isset($meta['heading']))     { $setClauses[] = 'heading = ?';     $params[] = $meta['heading']; }
@@ -940,19 +952,16 @@ class GitSync {
                             $results['pulled']++;
                             $results['debug'][] = "  {$filename} → created (heading: {$heading})";
                         }
-
                         $pulledNoteIds[] = $noteId;
-                        $this->con->exec('COMMIT');
-                    } catch (Exception $transEx) {
-                        try { $this->con->exec('ROLLBACK'); } catch (Exception $ignored) {}
-                        $results['errors'][] = ['path' => $filename, 'error' => $transEx->getMessage()];
-                        $results['debug'][]  = "  Transaction rolled back for $filename: " . $transEx->getMessage();
                     }
+
+                    $this->con->exec('COMMIT');
+                } catch (Exception $transEx) {
+                    try { $this->con->exec('ROLLBACK'); } catch (Exception $ignored) {}
+                    $results['success']  = false;
+                    $results['errors'][] = ['path' => 'db_upsert', 'error' => $transEx->getMessage()];
+                    $results['debug'][]  = 'DB upsert transaction failed: ' . $transEx->getMessage();
                 }
-            } catch (Exception $e) {
-                // Handle any general exceptions from HTTP requests or loops
-                $results['errors'][] = ['path' => 'loop', 'error' => $e->getMessage()];
-                $results['debug'][]  = 'Error during pull loop: ' . $e->getMessage();
             }
 
             // ── 4. Download attachments ──
@@ -979,13 +988,28 @@ class GitSync {
 
             // ── 5. Trash local notes not on remote ──
             $this->updateProgress($currentStep, $totalSteps, 'Cleaning up local notes...');
-            $localIds = $this->con->query('SELECT id FROM entries WHERE trash = 0')->fetchAll(PDO::FETCH_COLUMN);
-            foreach ($localIds as $localId) {
-                if (!in_array((int) $localId, $pulledNoteIds)) {
-                    $this->con->prepare('UPDATE entries SET trash = 1 WHERE id = ?')->execute([$localId]);
-                    $results['deleted']++;
-                    $results['debug'][] = "  Trashed local note id={$localId} (not on remote)";
+            try {
+                $localIds = $this->con->query('SELECT id FROM entries WHERE trash = 0')->fetchAll(PDO::FETCH_COLUMN);
+                $toTrash = [];
+                foreach ($localIds as $localId) {
+                    if (!in_array((int) $localId, $pulledNoteIds)) {
+                        $toTrash[] = (int) $localId;
+                    }
                 }
+                if (!empty($toTrash)) {
+                    $this->con->exec('BEGIN IMMEDIATE');
+                    $trashStmt = $this->con->prepare('UPDATE entries SET trash = 1 WHERE id = ?');
+                    foreach ($toTrash as $trashId) {
+                        $trashStmt->execute([$trashId]);
+                        $results['deleted']++;
+                        $results['debug'][] = "  Trashed local note id={$trashId} (not on remote)";
+                    }
+                    $this->con->exec('COMMIT');
+                }
+            } catch (Exception $trashEx) {
+                try { $this->con->exec('ROLLBACK'); } catch (Exception $ignored) {}
+                $results['errors'][] = ['path' => 'trash_cleanup', 'error' => $trashEx->getMessage()];
+                $results['debug'][]  = 'Trash cleanup failed: ' . $trashEx->getMessage();
             }
 
             // ── 6. Save sync info ──
