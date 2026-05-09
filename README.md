@@ -42,9 +42,6 @@ https://demo.poznote.com
 - [Git Synchronization](#git-synchronization)
 - [Backup / Export](#backup--export)
 - [Restore / Import](#restore--import)
-- [Public Sharing](#public-sharing)
-- [Admin Tools](#admin-tools)
-- [PWA](#pwa)
 - [Offline View](#offline-view)
 - [Multiple Instances](#multiple-instances)
 - [MCP Server](#mcp-server)
@@ -237,9 +234,6 @@ Use the UI for:
 - Admin/global settings such as OIDC provider settings, Git Sync enablement, import limits, and custom CSS upload
 - User/profile settings such as local account passwords, theme, font sizes, note sorting, workspace background, and hidden UI elements
 
-With the default installation files, `.env.template` currently exposes `HTTP_WEB_PORT`, `POZNOTE_OIDC_CLIENT_ID`, `POZNOTE_OIDC_CLIENT_SECRET`, and `POZNOTE_OIDC_DISABLE_NORMAL_LOGIN`.
-
-If a setting exists in the UI, use the UI as the source of truth. Some legacy environment fallbacks still exist internally for compatibility, but they are not the primary configuration workflow.
 
 ### Modify System Settings (`.env`)
 
@@ -508,8 +502,8 @@ Poznote features a multi-user architecture with isolated data space for each use
 - **Data Isolation**: Each user has their own separate notes, workspaces, tags, folders and attachments.
 - **Hybrid Password Model**: Access uses per-profile credentials with custom passwords stored in the database. Until a password is changed in the UI, built-in defaults are used (`admin` for administrators, `user` for standard users).
 - **User Management**: Administrators can manage profiles via the Settings panel.
+- **Collaboration**: While data is isolated, you can share notes, folders, or entire workspaces in **Read-only** mode with other users of the same instance or publicly with a specific url.
 
-> ⚠️ **Warning:** It is not possible to share notes between users. Each user has their own isolated space. The only way to share notes or a profile is to share a common account.
 
 ### Architecture & Structure
 
@@ -813,45 +807,6 @@ updated: 2024-01-20 15:45:00
 
 </details>
 
-## Public Sharing
-
-Poznote allows you to share individual notes or entire folders with anyone. 
-
-  - **Standard Notes:** Share in **Read-only** mode with anyone via a public link.
-  - **Task Lists:** Enhanced control with three permission levels: **Read-only**, **Just checkable** (allows checking items without full edit rights), or **Fully modifiable**.
-  - **Visibility:** Limit sharing to the public (anyone with the link) or restrict access to registered users of your Poznote instance.
-  - **Password Protection:** Secure your shared content by adding a mandatory password to the public URL for an extra layer of security.
-
-## Admin Tools
-
-Administrators have access to a suite of maintenance and management tools under **Settings > Admin Tools**:
-
-- **User Management:** Create, manage, and delete user profiles, or reset passwords.
-- **Git Sync Control:** Globally enable or disable Git synchronization features.
-- **Import Limits:** Configure the maximum number of files allowed for individual or ZIP imports.
-- **Custom CSS:** Upload a global custom stylesheet to override the application's appearance. The file is stored in your data volume (`data/css/`) and survives image updates.
-- **Rebuild Master Database:** Reconstruct the user index from data folders in case of system corruption or database loss.
-- **Base64 Image Converter:** Convert inline Base64 encoded images within notes to proper file attachments.
-- **Orphan attachments scanner:** Scan and clean up storage by identifying attachment files that are no longer referenced in any notes.
-
-## PWA
-
-Poznote can be installed as a **Progressive Web App (PWA)** in compatible browsers (Chrome, Edge, Safari on iOS, etc.).
-
-### Install on desktop
-
-1. Open your Poznote URL in the browser.
-2. Use the browser install action (for example **Install app** in the address bar/menu), or use the install button in **Settings** → **PWA Installation**.
-3. Launch Poznote from your applications list like a native app.
-
-### Install on mobile
-
-- **Android (Chrome/Edge):** open menu → **Install app** / **Add to Home screen**
-- **iPhone/iPad (Safari):** tap **Share** → **Add to Home Screen**
-
-### Offline behavior
-
-Poznote can be installed as a PWA, but this does not provide offline access to your notes content. For offline access to your notes, you must use the **Complete Backup** export feature (see section below).
 
 ## Offline View
 
