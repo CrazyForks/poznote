@@ -800,6 +800,24 @@ function addImportedPoznoteAttachmentToNote(&$noteAttachments, $imageInfo) {
     return $attachmentId;
 }
 
+function resolveImportedPoznoteAttachmentId($attachmentReference, array $attachmentIdMap) {
+    $reference = html_entity_decode(trim((string)$attachmentReference), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $reference = strtok($reference, '?#');
+    $reference = basename(str_replace('\\', '/', $reference));
+    $reference = rawurldecode($reference);
+
+    if (isset($attachmentIdMap[$reference])) {
+        return $reference;
+    }
+
+    $withoutExtension = preg_replace('/\.(?:png|jpe?g|gif|webp|svg|bmp|ico|pdf|mp4|mov|webm|mp3|wav|ogg|m4a|txt|md|markdown|json|csv|xml|zip|tar|gz|7z|rar)$/i', '', $reference);
+    if ($withoutExtension !== $reference && isset($attachmentIdMap[$withoutExtension])) {
+        return $withoutExtension;
+    }
+
+    return $reference;
+}
+
 function importNotesZip($uploadedFile) {
     global $con;
     
@@ -1264,8 +1282,8 @@ function importIndividualNotesZip($uploadedFile, $workspace = null, $folder = nu
         }
         
         // Check if this is from an attachments/ folder (Poznote export)
-        if (preg_match('#(?:^|/)attachments/([a-zA-Z0-9_-]+)\.#', $fileName, $matches)) {
-            $attachmentId = $matches[1];
+        if (preg_match('#(?:^|/)attachments/([^/]+)$#', $fileName, $matches)) {
+            $attachmentId = preg_replace('/\.' . preg_quote($fileExtension, '/') . '$/i', '', basename($matches[1]));
             
             // Generate unique filename for storage
             $uniqueFilename = uniqid() . '_' . time() . '.' . $fileExtension;
@@ -1506,9 +1524,9 @@ function importIndividualNotesZip($uploadedFile, $workspace = null, $folder = nu
                 
                 // Handle Poznote-exported markdown images: (../)attachments/{attachmentId}.ext
                 if (!empty($attachmentIdMap)) {
-                    $content = preg_replace_callback('/!\[([^\]]*)\]\((?:\.\.\/|\.\/|\/)*attachments\/([a-zA-Z0-9_-]+)(?:\.[^)]+)?\)/i', function($matches) use ($noteId, $attachmentIdMap, &$noteAttachments) {
+                    $content = preg_replace_callback('/!\[([^\]]*)\]\((?:\.\.\/|\.\/|\/)*attachments\/([^\)]+)\)/i', function($matches) use ($noteId, $attachmentIdMap, &$noteAttachments) {
                         $altText = $matches[1];
-                        $oldAttachmentId = $matches[2];
+                        $oldAttachmentId = resolveImportedPoznoteAttachmentId($matches[2], $attachmentIdMap);
                         
                         if (isset($attachmentIdMap[$oldAttachmentId])) {
                             $imageInfo = $attachmentIdMap[$oldAttachmentId];
@@ -1526,10 +1544,10 @@ function importIndividualNotesZip($uploadedFile, $workspace = null, $folder = nu
                     }, $content);
 
                     // Markdown notes can contain raw HTML blocks (notably Excalidraw containers).
-                    $content = preg_replace_callback('#(src|href)=(["\']?)(?:\.\.\/|\.\/|\/)*attachments/([a-zA-Z0-9_-]+)(?:\.[^"\'>\s]+)?\2#i', function($matches) use ($noteId, $attachmentIdMap, &$noteAttachments) {
+                    $content = preg_replace_callback('#(src|href)=(["\']?)(?:\.\.\/|\.\/|\/)*attachments/([^"\'>\s]+)\2#i', function($matches) use ($noteId, $attachmentIdMap, &$noteAttachments) {
                         $attr = $matches[1];
                         $quote = $matches[2];
-                        $oldAttachmentId = $matches[3];
+                        $oldAttachmentId = resolveImportedPoznoteAttachmentId($matches[3], $attachmentIdMap);
 
                         if (isset($attachmentIdMap[$oldAttachmentId])) {
                             $imageInfo = $attachmentIdMap[$oldAttachmentId];
@@ -1553,10 +1571,10 @@ function importIndividualNotesZip($uploadedFile, $workspace = null, $folder = nu
                 }
             } else if ($noteType === 'note' && !empty($attachmentIdMap)) {
                 // For HTML notes, handle Poznote-exported attachments: (../)attachments/{attachmentId}.ext
-                $content = preg_replace_callback('#(src|href)=(["\']?)(?:\.\.\/|\.\/|\/)*attachments/([a-zA-Z0-9_-]+)(?:\.[^"\'>\s]+)?\2#i', function($matches) use ($noteId, $attachmentIdMap, &$noteAttachments) {
+                $content = preg_replace_callback('#(src|href)=(["\']?)(?:\.\.\/|\.\/|\/)*attachments/([^"\'>\s]+)\2#i', function($matches) use ($noteId, $attachmentIdMap, &$noteAttachments) {
                     $attr = $matches[1];
                     $quote = $matches[2];
-                    $oldAttachmentId = $matches[3];
+                    $oldAttachmentId = resolveImportedPoznoteAttachmentId($matches[3], $attachmentIdMap);
                     
                     if (isset($attachmentIdMap[$oldAttachmentId])) {
                         $imageInfo = $attachmentIdMap[$oldAttachmentId];

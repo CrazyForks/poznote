@@ -554,6 +554,16 @@ if ($isAdmin) {
                 </div>
             </div>
 
+            <!-- Attachment URL Repair -->
+            <div class="home-card settings-card-clickable" id="repair-attachments-card" data-href="admin/repair-attachments.php">
+                <div class="home-card-icon">
+                    <i class="lucide lucide-wrench"></i>
+                </div>
+                <div class="home-card-content">
+                    <span class="home-card-title"><?php echo t_h('settings.cards.repair_attachments', [], 'Repair attachment images'); ?></span>
+                </div>
+            </div>
+
         </div>
         <?php endif; ?>
 

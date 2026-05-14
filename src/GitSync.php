@@ -1526,7 +1526,7 @@ class GitSync {
         
         // Transform links
         $content = preg_replace_callback(
-            '#/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9_-]+)#',
+            '#/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9._-]+)#',
             function($matches) use ($idToFilename) {
                 $attachmentId = $matches[1];
                 if (isset($idToFilename[$attachmentId])) {

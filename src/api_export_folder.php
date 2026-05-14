@@ -124,10 +124,10 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             // Convert Markdown image URLs if this note has attachments
             if (isset($noteAttachments[$noteId])) {
                 $content = preg_replace_callback(
-                    '#\!\[([^\]]*)\]\(/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9_]+)\)#',
+                    '#\!\[([^\]]*)\]\(/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9._-]+)\)#',
                     function($matches) use ($noteAttachments, $noteId) {
                         $altText = $matches[1];
-                        $attachmentId = $matches[2];
+                        $attachmentId = resolveAttachmentReferenceId($matches[2], $noteAttachments[$noteId]);
                         $extension = $noteAttachments[$noteId][$attachmentId] ?? '';
                         return '![' . $altText . '](attachments/' . $attachmentId . $extension . ')';
                     },
@@ -138,9 +138,9 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             // Convert HTML image URLs if this note has attachments
             if (isset($noteAttachments[$noteId])) {
                 $content = preg_replace_callback(
-                    '#/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9_]+)#',
+                    '#/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9._-]+)#',
                     function($matches) use ($noteAttachments, $noteId) {
-                        $attachmentId = $matches[1];
+                        $attachmentId = resolveAttachmentReferenceId($matches[1], $noteAttachments[$noteId]);
                         $extension = $noteAttachments[$noteId][$attachmentId] ?? '';
                         return 'attachments/' . $attachmentId . $extension;
                     },

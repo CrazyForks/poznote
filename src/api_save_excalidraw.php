@@ -160,7 +160,7 @@ if ($note_id > 0) {
         $oldAttachmentId = null;
         
         // Extract old attachment ID from existing HTML
-        if (!empty($existing_content) && preg_match('/<img[^>]+src="\/api\/v1\/notes\/' . preg_quote($note_id, '/') . '\/attachments\/([a-zA-Z0-9_]+)"[^>]*data-is-excalidraw="true"/', $existing_content, $matches)) {
+        if (!empty($existing_content) && preg_match('/<img[^>]+src="\/api\/v1\/notes\/' . preg_quote($note_id, '/') . '\/attachments\/([a-zA-Z0-9._-]+)"[^>]*data-is-excalidraw="true"/', $existing_content, $matches)) {
             $oldAttachmentId = $matches[1];
         }
         
@@ -346,8 +346,8 @@ function saveEmbeddedDiagram() {
                 $oldAttachmentId = null;
                 
                 // Extract old attachment ID from existing HTML for this specific diagram
-                $diagram_pattern = '/<div[^>]*id="' . preg_quote($diagram_id, '/') . '"[^>]*>.*?<img[^>]+src="\/api\/v1\/notes\/' . preg_quote($note_id, '/') . '\/attachments\/([a-zA-Z0-9_]+)"[^>]*>.*?<\/div>/s';
-                $diagram_pattern_alt = '/<div[^>]*class="excalidraw-container"[^>]*id="' . preg_quote($diagram_id, '/') . '"[^>]*>.*?<img[^>]+src="\/api\/v1\/notes\/' . preg_quote($note_id, '/') . '\/attachments\/([a-zA-Z0-9_]+)"[^>]*>.*?<\/div>/s';
+                $diagram_pattern = '/<div[^>]*id="' . preg_quote($diagram_id, '/') . '"[^>]*>.*?<img[^>]+src="\/api\/v1\/notes\/' . preg_quote($note_id, '/') . '\/attachments\/([a-zA-Z0-9._-]+)"[^>]*>.*?<\/div>/s';
+                $diagram_pattern_alt = '/<div[^>]*class="excalidraw-container"[^>]*id="' . preg_quote($diagram_id, '/') . '"[^>]*>.*?<img[^>]+src="\/api\/v1\/notes\/' . preg_quote($note_id, '/') . '\/attachments\/([a-zA-Z0-9._-]+)"[^>]*>.*?<\/div>/s';
                 
                 if (preg_match($diagram_pattern, $html_content, $matches) || preg_match($diagram_pattern_alt, $html_content, $matches)) {
                     $oldAttachmentId = $matches[1];

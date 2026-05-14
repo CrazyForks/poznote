@@ -76,11 +76,12 @@ function buildSearchConditions($search, $tags_search, $folder_filter, $workspace
     
     // Intelligent search that excludes Excalidraw content
     // Optimized: Check heading first (indexed), then entry content (slower)
-    if (!empty($search)) {
+    $search_text = trim((string)$search);
+    if ($search_text !== '') {
         // Parse search terms with support for quoted phrases
-        $parsed_terms = parseSearchTerms($search);
+        $parsed_terms = parseSearchTerms($search_text);
 
-        if (count($parsed_terms) <= 1 && $parsed_terms[0]['type'] === 'word') {
+        if (count($parsed_terms) === 1 && $parsed_terms[0]['type'] === 'word') {
             // Single word: Optimized search - check heading first (fast with index), then entry (slower)
             // Using CASE to avoid calling search_clean_entry when heading matches
             // Accent-insensitive search using remove_accents function
@@ -88,7 +89,7 @@ function buildSearchConditions($search, $tags_search, $folder_filter, $workspace
             $notes_params[] = '%' . $parsed_terms[0]['value'] . '%';
             $notes_params[] = '%' . $parsed_terms[0]['value'] . '%';
             $notes_params[] = '%' . $parsed_terms[0]['value'] . '%';
-        } else {
+        } elseif (count($parsed_terms) > 0) {
             // Multiple terms or phrase: require ALL terms to appear (AND)
             // Optimized to check heading first for each term
             // Accent-insensitive search using remove_accents function
@@ -103,15 +104,19 @@ function buildSearchConditions($search, $tags_search, $folder_filter, $workspace
         }
     }
     
-    if (!empty($tags_search)) {
+    $tags_search_text = trim((string)$tags_search);
+    if ($tags_search_text !== '') {
         // Handle multiple tags search - split by comma or space
-        $search_tags = array_filter(array_map('trim', preg_split('/[,\s]+/', $tags_search)));
+        $search_tags = array_values(array_filter(
+            array_map('trim', preg_split('/[,\s]+/', $tags_search_text)),
+            fn($tag) => $tag !== ''
+        ));
         
         if (count($search_tags) == 1) {
             // Single tag search - accent-insensitive
             $tags_condition = "remove_accents(tags) LIKE remove_accents(?)";
             $tags_params[] = '%' . $search_tags[0] . '%';
-        } else {
+        } elseif (count($search_tags) > 1) {
             // Multiple tags search - all tags must be present - accent-insensitive
             $tag_conditions = [];
             foreach ($search_tags as $tag) {

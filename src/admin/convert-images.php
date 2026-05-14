@@ -310,7 +310,7 @@ $pageWorkspace = trim(getWorkspaceFilter());
 
             <!-- Header -->
             <div class="ci-results-header">
-                <i class="lucide-<?php echo $action === 'convert' ? 'check-circle' : 'bar-chart-2'; ?>"></i>
+                <i class="lucide-<?php echo $action === 'convert' ? 'check-circle' : 'bar-chart'; ?>"></i>
                 <h2><?php echo $action === 'convert' ? t_h('admin_tools.convert_images.results_convert', [], 'Conversion results') : t_h('admin_tools.convert_images.results_scan', [], 'Scan results'); ?></h2>
             </div>
 

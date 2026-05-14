@@ -70,6 +70,39 @@ function setFilePermissions($path, $permissions = 0644) {
 }
 
 /**
+ * Resolve an attachment reference against known attachment IDs.
+ * Older exports may contain only the prefix before a dotted attachment ID.
+ */
+function resolveAttachmentReferenceId($attachmentId, array $attachmentExtensions) {
+    $attachmentId = (string)$attachmentId;
+    if (array_key_exists($attachmentId, $attachmentExtensions)) {
+        return $attachmentId;
+    }
+
+    if (strpos($attachmentId, '.') !== false) {
+        return $attachmentId;
+    }
+
+    $resolvedId = null;
+    foreach ($attachmentExtensions as $knownId => $_extension) {
+        $knownId = (string)$knownId;
+        if (strpos($knownId, '.') === false) {
+            continue;
+        }
+
+        $prefix = strstr($knownId, '.', true);
+        if ($prefix === $attachmentId) {
+            if ($resolvedId !== null) {
+                return $attachmentId;
+            }
+            $resolvedId = $knownId;
+        }
+    }
+
+    return $resolvedId ?? $attachmentId;
+}
+
+/**
  * Detect if the current request is using HTTPS
  * Supports reverse proxy headers (X-Forwarded-Proto, X-Forwarded-SSL)
  */
@@ -1300,16 +1333,22 @@ function restoreEntriesFromDir($sourceDir) {
                     // Convert relative attachment paths back to API URLs
                     if ($extension === 'html') {
                         // Convert ../attachments/{attachmentId}.ext to /api/v1/notes/{noteId}/attachments/{attachmentId}
-                        $content = preg_replace(
-                            '#\.\./attachments/([a-zA-Z0-9_]+)(?:\.[a-zA-Z0-9]+)?#',
-                            '/api/v1/notes/' . $noteId . '/attachments/$1',
+                        $content = preg_replace_callback(
+                            '#\.\./attachments/([^"\'\s<>]+)#',
+                            function($matches) use ($noteId) {
+                                $attachmentId = preg_replace('/\.(?:png|jpe?g|gif|webp|svg|bmp|ico|pdf|mp4|mov|webm|mp3|wav|ogg|m4a|txt|md|markdown|json|csv|xml|zip|tar|gz|7z|rar)$/i', '', basename($matches[1]));
+                                return '/api/v1/notes/' . $noteId . '/attachments/' . $attachmentId;
+                            },
                             $content
                         );
                     } else if ($extension === 'md') {
                         // Convert ![alt](../attachments/{attachmentId}.ext) to ![alt](/api/v1/notes/{noteId}/attachments/{attachmentId})
-                        $content = preg_replace(
-                            '#\!\[([^\]]*)\]\(\.\./attachments/([a-zA-Z0-9_]+)(?:\.[a-zA-Z0-9]+)?\)#',
-                            '![$1](/api/v1/notes/' . $noteId . '/attachments/$2)',
+                        $content = preg_replace_callback(
+                            '#\!\[([^\]]*)\]\(\.\./attachments/([^\)]+)\)#',
+                            function($matches) use ($noteId) {
+                                $attachmentId = preg_replace('/\.(?:png|jpe?g|gif|webp|svg|bmp|ico|pdf|mp4|mov|webm|mp3|wav|ogg|m4a|txt|md|markdown|json|csv|xml|zip|tar|gz|7z|rar)$/i', '', basename($matches[2]));
+                                return '![' . $matches[1] . '](/api/v1/notes/' . $noteId . '/attachments/' . $attachmentId . ')';
+                            },
                             $content
                         );
                     }

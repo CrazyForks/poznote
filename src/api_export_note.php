@@ -752,9 +752,9 @@ function exportAsHtmlZip($htmlContent, $note, $con) {
     
     // Modify HTML to use local attachments folder with extensions
     $htmlContent = preg_replace_callback(
-        '#/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9_]+)#',
+        '#/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9._-]+)#',
         function($matches) use ($attachmentExtensions) {
-            $attachmentId = $matches[1];
+            $attachmentId = resolveAttachmentReferenceId($matches[1], $attachmentExtensions);
             $extension = $attachmentExtensions[$attachmentId] ?? '';
             return 'attachments/' . $attachmentId . $extension;
         },
@@ -962,9 +962,9 @@ function exportAsMarkdownZip($content, $note, $con) {
     
     // Modify markdown to use local attachments folder with extensions
     $markdownContent = preg_replace_callback(
-        '#/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9_]+)#',
+        '#/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9._-]+)#',
         function($matches) use ($attachmentExtensions) {
-            $attachmentId = $matches[1];
+            $attachmentId = resolveAttachmentReferenceId($matches[1], $attachmentExtensions);
             $extension = $attachmentExtensions[$attachmentId] ?? '';
             return 'attachments/' . $attachmentId . $extension;
         },
