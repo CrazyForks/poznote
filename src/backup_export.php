@@ -457,9 +457,9 @@ function convertApiUrlsToRelativePaths($html, $attachmentExtensions, $noteId) {
     
     // Convert /api/v1/notes/{noteId}/attachments/{attachmentId} to attachments/{attachmentId}.ext
     $html = preg_replace_callback(
-        '#/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9_]+)#',
+        '#/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9._-]+)#',
         function($matches) use ($attachmentExtensions) {
-            $attachmentId = $matches[1];
+            $attachmentId = resolveAttachmentReferenceId($matches[1], $attachmentExtensions);
             $extension = $attachmentExtensions[$attachmentId] ?? '';
             return '../attachments/' . $attachmentId . $extension;
         },
@@ -485,10 +485,10 @@ function convertMarkdownApiUrlsToRelativePaths($markdown, $attachmentExtensions,
     
     // Convert ![alt](/api/v1/notes/{noteId}/attachments/{attachmentId}) to ![alt](../attachments/{attachmentId}.ext)
     $markdown = preg_replace_callback(
-        '#\!\[([^\]]*)\]\(/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9_]+)\)#',
+        '#\!\[([^\]]*)\]\(/api/v1/notes/' . preg_quote($noteId, '#') . '/attachments/([a-zA-Z0-9._-]+)\)#',
         function($matches) use ($attachmentExtensions) {
             $altText = $matches[1];
-            $attachmentId = $matches[2];
+            $attachmentId = resolveAttachmentReferenceId($matches[2], $attachmentExtensions);
             $extension = $attachmentExtensions[$attachmentId] ?? '';
             return '![' . $altText . '](../attachments/' . $attachmentId . $extension . ')';
         },
