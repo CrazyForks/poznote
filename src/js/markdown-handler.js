@@ -1487,11 +1487,11 @@ function parseMarkdown(text) {
     let fencedCodeIndex = 0;
     // Match: ```lang [newline] content [newline] ```
     // Also match code blocks that are at the very start of the text
-    text = text.replace(/(?:^|\n)(\s*```[^\n]*\n[\s\S]*?\n\s*```)(?=\n|$)/g, function (match, p1) {
+    text = text.replace(/(^|\n)([ \t]*```[^\n]*\n[\s\S]*?\n[ \t]*```)(?=\n|$)/g, function (match, prefix, block) {
         let placeholder = '\x00FENCEDCODE' + fencedCodeIndex + '\x00';
-        protectedFencedCode[fencedCodeIndex] = match;
+        protectedFencedCode[fencedCodeIndex] = block;
         fencedCodeIndex++;
-        return (match.startsWith('\n') ? '\n' : '') + placeholder;
+        return prefix + placeholder;
     });
 
     // Protect inline code spans so their content is not consumed by math regexes
@@ -2060,9 +2060,9 @@ function parseMarkdown(text) {
                 );
             }
 
-            // A paragraph break already introduces one visual line via paragraph spacing,
-            // so only add placeholders for additional intentional empty lines.
-            let placeholdersToAdd = Math.max(blankLineCount - 1, 0);
+            // Block elements already contribute their own spacing; regular text keeps
+            // authored blank lines visible in the preview.
+            let placeholdersToAdd = isNextBlockElement ? Math.max(blankLineCount - 1, 0) : blankLineCount;
             for (let bl = 0; bl < placeholdersToAdd; bl++) {
                 result.push('<p class="blank-line">&nbsp;</p>');
             }

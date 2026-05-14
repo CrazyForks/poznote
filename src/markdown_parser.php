@@ -345,9 +345,9 @@ function parseMarkdown($text) {
     $protectedCodeBlocks = [];
     $codeBlockIndex = 0;
     
-    $text = preg_replace_callback('/```([^\n]*)\n(.*?)```/s', function($matches) use (&$protectedCodeBlocks, &$codeBlockIndex) {
-        $lang = trim($matches[1]);
-        $code = $matches[2];
+    $text = preg_replace_callback('/(^|\n)([ \t]*```([^\n]*)\n(?:(.*?)\n)?[ \t]*```)(?=\n|$)/s', function($matches) use (&$protectedCodeBlocks, &$codeBlockIndex) {
+        $lang = trim($matches[3]);
+        $code = isset($matches[4]) ? $matches[4] : '';
         $placeholder = "\x00CODEBLOCK" . $codeBlockIndex . "\x00";
         
         if (strtolower($lang) === 'mermaid') {
@@ -369,7 +369,7 @@ function parseMarkdown($text) {
             }
         }
         $codeBlockIndex++;
-        return "\n" . $placeholder . "\n";
+        return $matches[1] . $placeholder;
     }, $text);
 
     $protectedInlineCode = [];
