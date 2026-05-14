@@ -776,6 +776,9 @@ function parseMarkdown($text) {
                 $blankLineCount++;
                 $i++;
             }
+
+            $previousResult = count($result) > 0 ? $result[count($result) - 1] : '';
+            $isPreviousCodeBlockElement = preg_match('/^<pre\b|^<div class="mermaid"\b/', $previousResult) === 1;
             
             // Check if the next non-empty line is a block element (code block, header, list, etc.)
             // If so, don't add blank line placeholders as block elements have their own spacing
@@ -800,9 +803,9 @@ function parseMarkdown($text) {
             }
             
             // Preserve blank lines based on context:
-            // - Before block elements: keep (count - 1) blank lines (block has natural spacing)
-            // - Before text: keep all blank lines
-            if ($isNextBlockElement) {
+            // - Before block elements or after code blocks: keep (count - 1) blank lines
+            // - Between regular text blocks: keep all blank lines
+            if ($isNextBlockElement || $isPreviousCodeBlockElement) {
                 for ($bl = 0; $bl < ($blankLineCount - 1); $bl++) {
                     $result[] = '<p class="blank-line">&nbsp;</p>';
                 }

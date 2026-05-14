@@ -2039,6 +2039,9 @@ function parseMarkdown(text) {
                 i++;
             }
 
+            let previousResult = result.length > 0 ? result[result.length - 1] : '';
+            let isPreviousCodeBlockElement = /^<pre\b/.test(previousResult) || /^<div class="mermaid"\b/.test(previousResult);
+
             // Avoid adding a full blank placeholder right before block elements,
             // because those already contribute their own top spacing.
             let nextNonEmptyIndex = i + 1;
@@ -2061,8 +2064,8 @@ function parseMarkdown(text) {
             }
 
             // Block elements already contribute their own spacing; regular text keeps
-            // authored blank lines visible in the preview.
-            let placeholdersToAdd = isNextBlockElement ? Math.max(blankLineCount - 1, 0) : blankLineCount;
+            // authored blank lines visible unless the previous block was a code block.
+            let placeholdersToAdd = (isNextBlockElement || isPreviousCodeBlockElement) ? Math.max(blankLineCount - 1, 0) : blankLineCount;
             for (let bl = 0; bl < placeholdersToAdd; bl++) {
                 result.push('<p class="blank-line">&nbsp;</p>');
             }
